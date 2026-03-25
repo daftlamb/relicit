@@ -685,7 +685,8 @@ function animatePoster(ch, data, etymInfo) {
     var skipRate = 1;
     var blurAmt2=(1-focus2)*sl2.size*0.18;
     var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
-    var keepR2=0.2+focus2*0.55;
+    // Hero gets higher keep rate for denser dots
+    var keepR2 = isHero2 ? (0.5 + focus2*0.45) : (0.2 + focus2*0.55);
     var ox2=sl2.cx-sl2.size/2, oy2=sl2.cy-sl2.size/2;
     for(var py2=0;py2<sampleSize;py2+=skipRate){
       for(var px3=0;px3<sampleSize;px3+=skipRate){
