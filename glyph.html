@@ -69,18 +69,41 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
     display:flex;
     align-items:center;
     justify-content:center;
-    height:36px;
+    height:48px;
     cursor:pointer;
     flex-shrink:0;
     touch-action:none;
+    padding:0 16px;
+    position:relative;
   }
   #drawer-handle::before{
     content:'';
     width:36px;height:4px;
     background:var(--border);
     border-radius:2px;
+    position:absolute;
+    top:10px;
+    left:50%;
+    transform:translateX(-50%);
   }
-  #canvas-area{padding-bottom:64px}
+  #drawer-quick-gen{
+    position:absolute;
+    right:16px;
+    top:50%;
+    transform:translateY(-50%);
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:6px 14px;
+    font-family:inherit;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  #canvas-area{padding-bottom:48px}
+  #panel{height:48px}
+  #panel.drawer-open{height:82vh}
 }
 @media(min-width:701px){
   #drawer-handle{display:none}
@@ -97,7 +120,9 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 </header>
 <div id="app">
   <div id="panel">
-    <div id="drawer-handle"></div>
+    <div id="drawer-handle">
+      <button id="drawer-quick-gen">✦ Generate</button>
+    </div>
     <div id="panel-inner">
     <div class="panel-section">
       <div class="section-title">Character</div>
@@ -163,6 +188,17 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
     isOpen = open;
     panel.classList.toggle('drawer-open', open);
     panel.style.height = '';
+  }
+  // Quick generate button — runs generate then closes drawer
+  var quickBtn = document.getElementById('drawer-quick-gen');
+  if (quickBtn) {
+    quickBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      // trigger generate (defined in main IIFE)
+      var genBtn = document.getElementById('btn-generate');
+      if (genBtn) genBtn.click();
+      setOpen(false); // collapse drawer so animation is visible
+    });
   }
   handle.addEventListener('click', function(){ if (!dragging) setOpen(!isOpen); });
   handle.addEventListener('touchstart', function(e){
