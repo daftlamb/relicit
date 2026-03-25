@@ -493,18 +493,25 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   if (N > 0) {
     var margin = 60;
     var areaW = W - margin*2, areaH = (H-56) - margin*2;
+    // Pick one hero stroke — seeded so it's stable per character
+    var heroIdx = Math.floor(sr() * N);
     // Init random positions
     for (var li = 0; li < N; li++) {
-      var lsz = Math.round(Math.min(W,H-56) * (0.45 + sr()*0.45));
+      var isHero = (li === heroIdx);
+      // Hero: 65–85% of canvas short side; others: 30–55%
+      var lsz = isHero
+        ? Math.round(Math.min(W, H-56) * (0.65 + sr()*0.20))
+        : Math.round(Math.min(W, H-56) * (0.30 + sr()*0.25));
       layout.push({
         cx: margin + sr()*areaW,
         cy: margin + sr()*areaH,
         size: lsz,
-        depth: 0.3 + sr()*0.7
+        depth: 0.3 + sr()*0.7,
+        hero: isHero
       });
     }
-    // Repulsion iterations
-    var minDist = Math.min(W, H-56) * 0.28;
+    // Repulsion iterations — hero has stronger personal space
+    var minDist = Math.min(W, H-56) * 0.22;
     for (var iter = 0; iter < 80; iter++) {
       for (var a = 0; a < N; a++) {
         var fx = 0, fy = 0;
@@ -612,13 +619,17 @@ function animatePoster(ch, data, etymInfo) {
   function sr2() { seed2=(seed2*1664525+1013904223)&0x7fffffff; return seed2/0x7fffffff; }
   var N = total;
   var margin2=60, areaW2=W-margin2*2, areaH2=(H-56)-margin2*2;
+  // MUST match drawPoster exactly — heroIdx consumes one sr() first
+  var heroIdx2 = Math.floor(sr2()*N);
   var preLayout = [];
   for (var li2=0; li2<N; li2++) {
-    // MUST match drawPoster exactly: lsz=sr(), cx=sr(), cy=sr(), depth=sr()
-    var lsz2=Math.round(Math.min(W,H-56)*(0.45+sr2()*0.45));
+    var isHero2=(li2===heroIdx2);
+    var lsz2=isHero2
+      ? Math.round(Math.min(W,H-56)*(0.65+sr2()*0.20))
+      : Math.round(Math.min(W,H-56)*(0.30+sr2()*0.25));
     preLayout.push({cx:margin2+sr2()*areaW2, cy:margin2+sr2()*areaH2, size:lsz2, depth:0.3+sr2()*0.7});
   }
-  var minDist2=Math.min(W,H-56)*0.28;
+  var minDist2=Math.min(W,H-56)*0.22;
   for (var iter2=0;iter2<80;iter2++){
     for(var a2=0;a2<N;a2++){
       var fx2=0,fy2=0;
