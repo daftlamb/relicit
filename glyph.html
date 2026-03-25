@@ -518,28 +518,25 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       }
 
       // Sample points along bezier path and draw tiny particles
-      var totalPts = 120 + Math.floor(fg()*80);
-      var lineAlpha = 0.06 + fg()*0.10;
-      var dotR = 0.4 + fg()*0.7;
+      var totalPts = 280 + Math.floor(fg()*120); // denser
+      var lineAlpha = 0.10 + fg()*0.12;           // more visible
+      var dotR = 0.3 + fg()*0.5;                  // finer dots
 
       for (var pi2=0; pi2<totalPts; pi2++) {
         var tGlobal = pi2 / totalPts;
-        // Which segment
         var segIdx = Math.floor(tGlobal * nSeg);
         var tSeg = (tGlobal * nSeg) - segIdx;
         if (segIdx >= pts.length-1) segIdx = pts.length-2;
 
         var p0 = pts[segIdx], p1 = pts[segIdx+1];
-        // Cubic bezier point
         var mt = 1-tSeg;
         var bx = mt*mt*mt*p0.x + 3*mt*mt*tSeg*p1.cp1x + 3*mt*tSeg*tSeg*p1.cp2x + tSeg*tSeg*tSeg*p1.x;
         var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
 
-        // Fade at edges, peak at center
         var edgeFade = Math.sin(tGlobal * Math.PI);
-        // Random scatter perpendicular to flow
-        var scatter = (fg()-0.5) * (4 + fg()*6);
-        var pAlpha = lineAlpha * edgeFade * (0.3 + fg()*0.7);
+        // Tighter perpendicular scatter — more thread-like, less diffuse
+        var scatter = (fg()-0.5) * (1.5 + fg()*2.5);
+        var pAlpha = lineAlpha * edgeFade * (0.4 + fg()*0.6);
         var pr = dotR * (0.5 + fg()*0.8);
 
         ctx.globalAlpha = pAlpha;
