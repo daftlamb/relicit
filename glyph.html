@@ -317,47 +317,45 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
   // depthFocus controls: dot density keep%, dot size, jitter amount
   // fontChar: if set, use font glyph pixels masked by strokePath (method Y)
 
-  // 1. Build pixel mask on offscreen canvas
+  // 1. Build pixel mask on offscreen canvas — cap at 512px to avoid huge allocations
+  var sampleSz = Math.min(size, 512);
+  var szScale = size / sampleSz;
   var ofc = document.createElement('canvas');
-  ofc.width = size; ofc.height = size;
+  ofc.width = sampleSz; ofc.height = sampleSz;
   var ofx = ofc.getContext('2d');
-
 
     // Default: use hanzi-writer stroke path directly
     ofx.save();
-    ofx.translate(size/2, size/2);
-    ofx.scale(size/1024, -size/1024);
+    ofx.translate(sampleSz/2, sampleSz/2);
+    ofx.scale(sampleSz/1024, -sampleSz/1024);
     ofx.translate(-512, -512);
     ofx.fillStyle = '#000';
     try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
     ofx.restore();
-  
 
-  var imgData = ofx.getImageData(0, 0, size, size);
+  var imgData = ofx.getImageData(0, 0, sampleSz, sampleSz);
 
   // 2. PRNG
   var hs = holeSeed;
   function hr() { hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
 
-  // 3. Draw ink wash dots directly on main canvas
-  //    Each dot: random size (1–8px), random opacity, random offset from sampled pixel
-  //    Creates natural ink bleed / sumi-e texture
-  var step = 1; // sample every pixel for max density
+  // 3. Draw ink wash dots — adaptive step keeps total dots ≤ ~8000
+  var maxD = 8000;
+  var estPx = sampleSz * sampleSz * 0.25;
+  var step = Math.max(1, Math.round(Math.sqrt(estPx / maxD)));
   var ox = cx - size/2;
   var oy = cy - size/2;
 
-  // Parse ink color to RGB for alpha variation
   var inkR=26, inkG=18, inkB=8;
   var m = inkCol.match(/rgb\((\d+),(\d+),(\d+)\)/);
   if (m) { inkR=+m[1]; inkG=+m[2]; inkB=+m[3]; }
 
-  for (var py = 0; py < size; py += step) {
-    for (var px = 0; px < size; px += step) {
-      var idx = (py * size + px) * 4;
+  for (var py = 0; py < sampleSz; py += step) {
+    for (var px = 0; px < sampleSz; px += step) {
+      var idx = (py * sampleSz + px) * 4;
       if (imgData.data[idx+3] < 60) continue;
 
-      // Distance-to-edge approximation via alpha (edge pixels have lower alpha)
-      var edgeFactor = imgData.data[idx+3] / 255; // 1=center, <1=edge
+      var edgeFactor = imgData.data[idx+3] / 255;
 
       // Random ink dot properties
       var rnd = hr();
@@ -371,24 +369,22 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
 
       // Blur scatter: far strokes scatter outward from stroke center
       // edgeFactor≈0 means we're near the stroke edge → scatter most
-      var blurAmount = (1 - depthFocus) * size * 0.18; // max ~18% of size for far strokes
-      var edgeScatter = (1 - edgeFactor);              // 0=center, 1=edge
-      var scatterR = blurAmount * (edgeScatter * 0.7 + 0.3); // edge scatters more
-      // Direction: away from stroke center (size/2, size/2)
-      var dxC = px - size/2, dyC = py - size/2;
+      var blurAmount = (1 - depthFocus) * size * 0.18;
+      var edgeScatter = (1 - edgeFactor);
+      var scatterR = blurAmount * (edgeScatter * 0.7 + 0.3);
+      // Scale sample px/py to real size coords
+      var rpx = px * szScale, rpy = py * szScale;
+      var dxC = rpx - size/2, dyC = rpy - size/2;
       var distC = Math.sqrt(dxC*dxC + dyC*dyC) || 1;
       var scatterX = (dxC/distC) * scatterR * (0.4 + hr()*0.6);
       var scatterY = (dyC/distC) * scatterR * (0.4 + hr()*0.6);
 
-      // Small random jitter on top of directional scatter
       var jitter = r * (0.8 + (1-depthFocus)*1.5);
       var jx = scatterX + (hr()-0.5)*jitter;
       var jy = scatterY + (hr()-0.5)*jitter;
 
-      // Opacity: near=more opaque, far=more transparent
       var alpha = (0.3 + depthFocus*0.4 + hr()*0.3) * (0.5 + edgeFactor*0.5);
 
-      // Color variation: slight warmth shift per dot
       var cr = Math.min(255, inkR + Math.round((hr()-0.5)*20));
       var cg = Math.min(255, inkG + Math.round((hr()-0.5)*12));
       var cb = Math.min(255, inkB + Math.round((hr()-0.5)*8));
@@ -396,12 +392,10 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
       ctx.globalAlpha = alpha;
       ctx.fillStyle = 'rgb('+cr+','+cg+','+cb+')';
       ctx.beginPath();
-      // Mix circles and slight ellipses for organic feel
       if (hr() > 0.85) {
-        // Rare elongated drop
-        ctx.ellipse(ox+px+jx, oy+py+jy, r*1.4, r*0.5, hr()*Math.PI, 0, Math.PI*2);
+        ctx.ellipse(ox+rpx+jx, oy+rpy+jy, r*1.4, r*0.5, hr()*Math.PI, 0, Math.PI*2);
       } else {
-        ctx.arc(ox+px+jx, oy+py+jy, r, 0, Math.PI*2);
+        ctx.arc(ox+rpx+jx, oy+rpy+jy, r, 0, Math.PI*2);
       }
       ctx.fill();
     }
@@ -671,44 +665,52 @@ function animatePoster(ch, data, etymInfo) {
   var strokeDots = [];
   for (var si2=0; si2<total; si2++) {
     var sl2=preLayout[si2];
-    var focus2=preFocus[si2]; // use pre-computed focus matching drawPoster's sr() sequence
+    var focus2=preFocus[si2];
+    // Cap sample canvas at 512px max — hero strokes are huge but we don't need all pixels
+    var sampleSize = Math.min(sl2.size, 512);
+    var sizeScale = sl2.size / sampleSize; // scale dots back up to real size
     var ofc2=document.createElement('canvas');
-    ofc2.width=sl2.size; ofc2.height=sl2.size;
+    ofc2.width=sampleSize; ofc2.height=sampleSize;
     var ofx2=ofc2.getContext('2d');
-    ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
-    ofx2.scale(sl2.size/1024,-sl2.size/1024);
+    ofx2.save(); ofx2.translate(sampleSize/2,sampleSize/2);
+    ofx2.scale(sampleSize/1024,-sampleSize/1024);
     ofx2.translate(-512,-512);
     ofx2.fillStyle='#000';
     try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
     ofx2.restore();
-    var imd=ofx2.getImageData(0,0,sl2.size,sl2.size);
+    var imd=ofx2.getImageData(0,0,sampleSize,sampleSize);
     var hs3=seed2+si2*7919; function hr3(){hs3=(hs3*1664525+1013904223)&0x7fffffff;return hs3/0x7fffffff;}
     var dots=[];
+    // Adaptive step: keep total dots ≤ 8000 per stroke regardless of size
+    var maxDots = 8000;
+    var estPixels = sampleSize * sampleSize * 0.25; // rough fill estimate
+    var skipRate = Math.max(1, Math.round(Math.sqrt(estPixels / maxDots)));
     var blurAmt2=(1-focus2)*sl2.size*0.18;
     var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
     var keepR2=0.2+focus2*0.55;
     var ox2=sl2.cx-sl2.size/2, oy2=sl2.cy-sl2.size/2;
-    for(var py2=0;py2<sl2.size;py2+=1){
-      for(var px3=0;px3<sl2.size;px3+=1){
-        var pidx2=(py2*sl2.size+px3)*4;
+    for(var py2=0;py2<sampleSize;py2+=skipRate){
+      for(var px3=0;px3<sampleSize;px3+=skipRate){
+        var pidx2=(py2*sampleSize+px3)*4;
         if(imd.data[pidx2+3]<60) continue;
         if(hr3()>keepR2) continue;
         var ef2=imd.data[pidx2+3]/255;
         var br2=(0.2+focus2*0.5)+hr3()*(0.3+focus2*0.4);
-        var rr2=br2*(0.6+ef2*0.4);
+        var rr2=br2*(0.6+ef2*0.4)*Math.max(1,sizeScale*0.5); // scale dot size with stroke
         var esc2=1-ef2;
         var scR2=blurAmt2*(esc2*0.7+0.3);
-        var dxC2=px3-sl2.size/2,dyC2=py2-sl2.size/2;
+        // Scale sample coords back to real stroke size
+        var realPx=px3*sizeScale, realPy=py2*sizeScale;
+        var dxC2=realPx-sl2.size/2,dyC2=realPy-sl2.size/2;
         var dc2=Math.sqrt(dxC2*dxC2+dyC2*dyC2)||1;
         var scX2=(dxC2/dc2)*scR2*(0.4+hr3()*0.6);
         var scY2=(dyC2/dc2)*scR2*(0.4+hr3()*0.6);
         var jit2=rr2*(0.8+(1-focus2)*1.5);
-        // Circular start distribution — no square artifact
         var startAngle = hr3()*Math.PI*2;
-        var startDist = Math.sqrt(hr3()) * Math.min(W,H-56)*0.4; // sqrt for uniform circle fill
+        var startDist = Math.sqrt(hr3()) * Math.min(W,H-56)*0.4;
         dots.push({
-          tx: ox2+px3+scX2+(hr3()-0.5)*jit2,
-          ty: oy2+py2+scY2+(hr3()-0.5)*jit2,
+          tx: ox2+realPx+scX2+(hr3()-0.5)*jit2,
+          ty: oy2+realPy+scY2+(hr3()-0.5)*jit2,
           sx: W*0.5 + Math.cos(startAngle)*startDist,
           sy: (H-56)*0.5 + Math.sin(startAngle)*startDist,
           r:  rr2,
