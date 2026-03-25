@@ -328,14 +328,12 @@ function fetchGlyph(ch, callback) {
     });
 }
 
-// ── Ink stroke renderer: solid fill + internal void holes (stamp/ink effect) ─
+// ── Ink wash renderer: splatter dots inside stroke path — sumi-e style ────────
 function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
-  // Draw to offscreen canvas so we can punch holes with destination-out
+  // 1. Sample pixels inside stroke on offscreen canvas
   var ofc = document.createElement('canvas');
   ofc.width = size; ofc.height = size;
   var ofx = ofc.getContext('2d');
-
-  // Fill stroke solid
   ofx.save();
   ofx.translate(size/2, size/2);
   ofx.scale(size/1024, -size/1024);
@@ -343,63 +341,83 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
   ofx.fillStyle = '#000';
   try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
   ofx.restore();
+  var imgData = ofx.getImageData(0, 0, size, size);
 
-  // Punch random voids (destination-out) — ink absorption simulation
+  // 2. PRNG
   var hs = holeSeed;
   function hr() { hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
-  ofx.globalCompositeOperation = 'destination-out';
-  // Large voids (ink pools / dry patches)
-  var nLarge = 3 + Math.floor(hr()*5);
-  for (var i=0; i<nLarge; i++) {
-    var vx = hr()*size, vy = hr()*size;
-    var vr = size*(0.04 + hr()*0.10);
-    var va = 0.5 + hr()*0.45;
-    ofx.globalAlpha = va;
-    ofx.beginPath(); ofx.arc(vx, vy, vr, 0, Math.PI*2); ofx.fill();
-  }
-  // Small grain voids
-  var nSmall = 20 + Math.floor(hr()*30);
-  for (var j=0; j<nSmall; j++) {
-    var sx2 = hr()*size, sy2 = hr()*size;
-    var sr2 = size*(0.008 + hr()*0.025);
-    ofx.globalAlpha = 0.4 + hr()*0.5;
-    ofx.beginPath(); ofx.arc(sx2, sy2, sr2, 0, Math.PI*2); ofx.fill();
-  }
-  ofx.globalCompositeOperation = 'source-over';
-  ofx.globalAlpha = 1;
 
-  // Edge splatter: small dots around stroke on offscreen
-  // (drawn separately so they can overflow the stroke boundary)
-  var nSplat = 8 + Math.floor(hr()*12);
+  // 3. Draw ink wash dots directly on main canvas
+  //    Each dot: random size (1–8px), random opacity, random offset from sampled pixel
+  //    Creates natural ink bleed / sumi-e texture
+  var step = Math.max(2, Math.round(size / 80)); // adaptive sampling density
+  var ox = cx - size/2;
+  var oy = cy - size/2;
+
+  // Parse ink color to RGB for alpha variation
+  var inkR=26, inkG=18, inkB=8;
+  var m = inkCol.match(/rgb\((\d+),(\d+),(\d+)\)/);
+  if (m) { inkR=+m[1]; inkG=+m[2]; inkB=+m[3]; }
+
+  for (var py = 0; py < size; py += step) {
+    for (var px = 0; px < size; px += step) {
+      var idx = (py * size + px) * 4;
+      if (imgData.data[idx+3] < 60) continue;
+
+      // Distance-to-edge approximation via alpha (edge pixels have lower alpha)
+      var edgeFactor = imgData.data[idx+3] / 255; // 1=center, <1=edge
+
+      // Random ink dot properties
+      var rnd = hr();
+      if (rnd > 0.72) continue; // skip ~28% of pixels for sparseness/texture
+
+      // Dot radius: larger in center, smaller at edges, plus randomness
+      var baseR = 1.5 + hr()*3.5;
+      var r = baseR * (0.5 + edgeFactor*0.5);
+
+      // Random positional jitter — ink bleeding
+      var jitter = r * 1.8;
+      var jx = (hr()-0.5)*jitter;
+      var jy = (hr()-0.5)*jitter;
+
+      // Opacity: denser in center, lighter at edges
+      var alpha = (0.3 + hr()*0.5) * (0.4 + edgeFactor*0.6);
+
+      // Color variation: slight warmth shift per dot
+      var cr = Math.min(255, inkR + Math.round((hr()-0.5)*20));
+      var cg = Math.min(255, inkG + Math.round((hr()-0.5)*12));
+      var cb = Math.min(255, inkB + Math.round((hr()-0.5)*8));
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgb('+cr+','+cg+','+cb+')';
+      ctx.beginPath();
+      // Mix circles and slight ellipses for organic feel
+      if (hr() > 0.7) {
+        // Elongated drop
+        ctx.ellipse(ox+px+jx, oy+py+jy, r*1.5, r*0.6, hr()*Math.PI, 0, Math.PI*2);
+      } else {
+        ctx.arc(ox+px+jx, oy+py+jy, r, 0, Math.PI*2);
+      }
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // 4. Edge splatter: ink drops that escaped the stroke boundary
+  var nSplat = 6 + Math.floor(hr()*10);
   for (var k=0; k<nSplat; k++) {
+    // Find a random edge pixel and shoot out from it
+    var ex = hr()*size, ey = hr()*size;
     var angle = hr()*Math.PI*2;
-    var dist = size*(0.35 + hr()*0.25);
-    var spx = size/2 + Math.cos(angle)*dist;
-    var spy = size/2 + Math.sin(angle)*dist;
-    var spr = size*(0.004 + hr()*0.012);
-    ofx.globalAlpha = 0.2 + hr()*0.5;
-    ofx.fillStyle = '#000';
-    ofx.beginPath(); ofx.arc(spx, spy, spr, 0, Math.PI*2); ofx.fill();
+    var dist = size*(0.04 + hr()*0.12);
+    var spx = ox + ex + Math.cos(angle)*dist;
+    var spy = oy + ey + Math.sin(angle)*dist;
+    var spr = 1 + hr()*3;
+    ctx.globalAlpha = 0.08 + hr()*0.2;
+    ctx.fillStyle = 'rgb('+inkR+','+inkG+','+inkB+')';
+    ctx.beginPath(); ctx.arc(spx, spy, spr, 0, Math.PI*2); ctx.fill();
   }
-  ofx.globalAlpha = 1;
-
-  // Composite onto main canvas
-  ctx.save();
-  ctx.globalAlpha = 0.85 + hr()*0.15;
-  // Tint: colorize via globalCompositeOperation trick — draw colored rect then multiply
-  // Simpler: just draw offscreen as-is but tinted with fillStyle via shadow
-  ctx.drawImage(ofc, cx - size/2, cy - size/2);
-  ctx.restore();
-
-  // Color tint overlay (multiply-like: draw stroke shape in ink color at low opacity)
-  ctx.save();
-  ctx.globalAlpha = 0.18;
-  ctx.fillStyle = inkCol;
-  ctx.translate(cx, cy);
-  ctx.scale(size/1024, -size/1024);
-  ctx.translate(-512, -512);
-  try { ctx.fill(new Path2D(strokePath)); } catch(e) {}
-  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 // ── Font-based poster: render char with browser font, split into N tiles ─────
