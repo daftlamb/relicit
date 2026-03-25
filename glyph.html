@@ -808,7 +808,12 @@ function animatePoster(ch, data, etymInfo) {
           cr: Math.min(255,ip2r+Math.round((hr3()-0.5)*20)),
           cg: Math.min(255,ip2g+Math.round((hr3()-0.5)*12)),
           cb: Math.min(255,ip2b+Math.round((hr3()-0.5)*8)),
-          elong: hr3()>0.85, angle: hr3()*Math.PI
+          elong: hr3()>0.85, angle: hr3()*Math.PI,
+          // wind: per-particle noise offset applied mid-flight
+          wx: (hr3()-0.5)*W*0.18,  // lateral wind drift (peaks at t=0.45)
+          wy: (hr3()-0.5)*(H-56)*0.12,
+          // phase offset so not all particles move in sync
+          phase: hr3()*0.35
         });
       }
     }
@@ -819,22 +824,31 @@ function animatePoster(ch, data, etymInfo) {
   // t=0: dots scattered (random start pos), t=1: dots at target
   function drawStrokeDots(si3, t) {
     var dots=strokeDots[si3];
-    var sl3=preLayout[si3];
-    // easing: ease-out cubic
-    var et = 1 - Math.pow(1-t, 3);
-    // slight overshoot spring at the end
-    var spring = t >= 0.9 ? 1 + Math.sin((t-0.9)/0.1*Math.PI)*0.04 : 1;
+    // Easing: ease-in-out cubic for smooth gather
+    var et = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    // Spring overshoot near end
+    var spring = t > 0.85 ? 1 + Math.sin((t-0.85)/0.15*Math.PI)*0.035*(1-t/1) : 1;
 
     var hs4=seed2+si3*31337; function hr4(){hs4=(hs4*1664525+1013904223)&0x7fffffff;return hs4/0x7fffffff;}
 
     for(var di=0;di<dots.length;di++){
       var d=dots[di];
-      // Start position: scattered around canvas center, biased toward stroke center
+      // Start position: scattered from canvas center region
       var startX = W*0.5 + (hr4()-0.5)*W*0.7;
       var startY = (H-56)*0.5 + (hr4()-0.5)*(H-56)*0.5;
-      var curX = startX + (d.tx - startX)*et*spring;
-      var curY = startY + (d.ty - startY)*et*spring;
-      ctx.globalAlpha = d.al * Math.min(t*3, 1); // fade in early
+
+      // Wind arc: bezier-like curve via mid-point offset
+      // At t=0.5 the particle is at its most "blown" position
+      // wind envelope: sin(t*PI) peaks at t=0.5, zero at start and end
+      var tp = Math.max(0, t - d.phase); // phase-shifted t per particle
+      var windEnv = Math.sin(Math.min(tp, 1) * Math.PI); // bell curve 0→1→0
+      var windX = d.wx * windEnv * 0.6;
+      var windY = d.wy * windEnv * 0.6;
+
+      var curX = (startX + (d.tx - startX) * et * spring) + windX;
+      var curY = (startY + (d.ty - startY) * et * spring) + windY;
+
+      ctx.globalAlpha = d.al * Math.min(t*4, 1);
       ctx.fillStyle='rgb('+d.cr+','+d.cg+','+d.cb+')';
       ctx.beginPath();
       if(d.elong){ctx.ellipse(curX,curY,d.r*1.4,d.r*0.5,d.angle,0,Math.PI*2);}
@@ -850,7 +864,7 @@ function animatePoster(ch, data, etymInfo) {
   function runStroke(idx) {
     if (idx >= total) { drawPoster(ch, data, etymInfo); return; }
     var startTime = null;
-    var dur = 900; // ms per stroke gather animation
+    var dur = 1100; // ms per stroke — longer for wind arc to be visible
 
     function gatherFrame(ts) {
       if (!startTime) startTime = ts;
