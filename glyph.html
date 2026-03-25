@@ -355,17 +355,15 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
     ofx.textAlign = 'center';
     ofx.textBaseline = 'middle';
     ofx.fillStyle = '#000';
-    // hanzi-writer coord: 0,0=bottom-left, 900=top (within 1024 box, char sits ~100-900)
-    // Render font char to match hanzi-writer's effective bbox
-    // char occupies roughly y=100–900 in hanzi space → after Y-flip → canvas y=size*(1-900/1024) to size*(1-100/1024)
-    // so center ≈ size * (1 - 500/1024) = size * 0.512 ≈ size/2 (close enough, slight offset)
-    var hzOffsetY = size * (1 - 128/1024); // hanzi chars baseline around y=128 in 1024 space
-    ofx.fillText(fontChar, size/2, size * 0.51);
+    // hanzi-writer Y is bottom-up (0=bottom,1024=top); char bbox center ≈ y=412/1024
+    // After Y-flip to canvas: canvasY = size*(1 - 412/1024) = size*0.598
+    // X center ≈ 525/1024 ≈ 0.513
+    ofx.fillText(fontChar, size * 0.513, size * 0.598);
     // Mask: keep only pixels inside this stroke's path
     ofx.globalCompositeOperation = 'destination-in';
     ofx.save();
-    ofx.translate(0, size);       // flip Y: move origin to bottom
-    ofx.scale(size/1024, -size/1024); // scale + Y-flip
+    ofx.translate(0, size);       // Y-flip: origin to bottom-left
+    ofx.scale(size/1024, -size/1024);
     ofx.fillStyle = '#000';
     try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
     ofx.restore();
@@ -808,7 +806,7 @@ function animatePoster(ch, data, etymInfo) {
       ofx2.font = Math.round(sl2.size*0.88)+'px '+fstr2;
       ofx2.textAlign='center'; ofx2.textBaseline='middle';
       ofx2.fillStyle='#000';
-      ofx2.fillText(ch, sl2.size/2, sl2.size*0.51);
+      ofx2.fillText(ch, sl2.size*0.513, sl2.size*0.598);
       ofx2.globalCompositeOperation='destination-in';
       ofx2.save();
       ofx2.translate(0, sl2.size);
