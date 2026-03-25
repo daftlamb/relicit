@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Glyph It &#8212; Chinese Character Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Noto+Serif+SC:wght@300;400;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f0ece4;--panel-bg:#fff;--border:#e0d8cc;--text:#1a1a1a;--muted:#888;--accent:#8b4513;--header-bg:#fff;--header-h:44px}
+[data-theme="dark"]{--bg:#141414;--panel-bg:#1e1e1e;--border:#2a2a2a;--text:#f0f0f0;--muted:#666;--accent:#c8941a;--header-bg:#0e0e0e}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Outfit','Noto Serif SC',sans-serif;font-size:13px;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+header{height:var(--header-h);background:var(--header-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;z-index:100}
+.brand{font-size:16px;font-weight:500;font-family:'Outfit',sans-serif}
+.brand-it{color:var(--accent)}
+.header-spacer{flex:1}
+.btn-icon{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;height:28px;cursor:pointer;font-family:inherit;font-size:12px;padding:0 10px;transition:all .15s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+#app{display:flex;flex:1;min-height:0}
+#panel{width:300px;flex-shrink:0;background:var(--panel-bg);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.panel-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.section-title{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s}
+.btn:hover,.btn.active{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);border:none;color:#fff;border-radius:6px;padding:9px;font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;width:100%;margin-top:10px;transition:opacity .15s}
+.btn-primary:hover{opacity:.85}
+.char-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-family:'Noto Serif SC',serif;font-size:36px;text-align:center;outline:none;transition:border-color .15s}
+.char-input:focus{border-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{background:none;border:1px solid var(--border);color:var(--text);border-radius:5px;padding:3px 8px;font-family:'Noto Serif SC',serif;font-size:16px;cursor:pointer;transition:all .15s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.btn-group{display:flex;gap:4px;flex-wrap:wrap}
+.btn-group .btn{font-size:11px;padding:4px 10px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px}
+.toggle-switch{position:relative;width:32px;height:18px;cursor:pointer;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:9px;transition:background .2s}
+.toggle-switch input:checked+.toggle-track{background:var(--accent)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-switch input:checked~.toggle-knob{transform:translateX(14px)}
+#panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
+#status{font-size:11px;color:var(--muted);min-height:14px;margin-top:6px}
+#canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
+#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15)}
+@media(max-width:700px){
+  #app{flex-direction:column}
+  #panel{width:100%;height:auto;max-height:52vh;border-right:none;border-top:1px solid var(--border);order:2;overflow-y:auto}
+  #canvas-area{flex:1;order:1}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Glyph<span class="brand-it">It</span></div>
+  <div class="header-spacer"></div>
+  <button class="btn-icon" id="btn-export-hdr">&#8595; PNG</button>
+  <button class="btn-icon" id="btn-theme">&#9789;</button>
+</header>
+<div id="app">
+  <div id="panel">
+    <div class="panel-section">
+      <div class="section-title">Character</div>
+      <input class="char-input" id="char-input" maxlength="1" placeholder="&#23383;" autocomplete="off" spellcheck="false"/>
+      <div class="chips" id="preset-chips"></div>
+      <button class="btn-primary" id="btn-generate">Generate Poster</button>
+    </div>
+    <div class="panel-section">
+      <div class="section-title">Style</div>
+      <div class="btn-group" id="scheme-group">
+        <button class="btn active" data-scheme="parchment">Parchment</button>
+        <button class="btn" data-scheme="ink">Ink</button>
+        <button class="btn" data-scheme="night">Night</button>
+        <button class="btn" data-scheme="minimal">Minimal</button>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="section-title">Display</div>
+      <div class="toggle-row">
+        <span>Show stroke order</span>
+        <label class="toggle-switch"><input type="checkbox" id="tog-strokes" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="toggle-row">
+        <span>Show etymology</span>
+        <label class="toggle-switch"><input type="checkbox" id="tog-etym" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="toggle-row">
+        <span>Animate strokes</span>
+        <label class="toggle-switch"><input type="checkbox" id="tog-anim"/><div class="toggle-track"></div><div class="toggle-knob"></div></label>
+      </div>
+    </div>
+    <div id="panel-export">
+      <div class="section-title">Export</div>
+      <button class="btn-primary" id="btn-export-panel">&#8595; Download PNG</button>
+      <div id="status"></div>
+    </div>
+  </div>
+  <div id="canvas-area">
+    <canvas id="glyph-canvas" width="520" height="680"></canvas>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+
+// Color Schemes
+var SCHEMES = {
+  parchment: { bg:'#f5efe0', ink:'#2a1a0e', accent:'#8b4513', muted:'#b89870', ruled:'rgba(139,69,19,0.06)', watermark:'rgba(139,69,19,0.04)', badge:'#8b4513', badgeText:'#f5efe0', palette:['#2a1a0e','#8b4513','#4a6741','#1a3a5c','#5c3a6b','#6b4a1a','#2a4a4a','#5c4a2a'] },
+  ink:       { bg:'#1a1208', ink:'#f0c060', accent:'#c8941a', muted:'#7a6040', ruled:'rgba(200,148,26,0.06)', watermark:'rgba(200,148,26,0.04)', badge:'#c8941a', badgeText:'#1a1208', palette:['#f0c060','#e8a020','#d4701a','#c0a040','#e0d080','#d08020','#c0c040','#e0b060'] },
+  night:     { bg:'#0d0d1a', ink:'#a0e0ff', accent:'#00ffcc', muted:'#406080', ruled:'rgba(0,255,204,0.04)', watermark:'rgba(0,255,204,0.03)', badge:'#00ffcc', badgeText:'#0d0d1a', palette:['#a0e0ff','#00ffcc','#ff80c0','#80ffaa','#c0a0ff','#ffcc40','#40e0d0','#ff8040'] },
+  minimal:   { bg:'#ffffff', ink:'#111111', accent:'#333333', muted:'#aaaaaa', ruled:'rgba(0,0,0,0.04)', watermark:'rgba(0,0,0,0.03)', badge:'#333333', badgeText:'#ffffff', palette:['#111111','#333333','#555555','#222222','#444444','#666666','#1a1a1a','#2a2a2a'] }
+};
+
+var ETYM = {
+  '山':{ radical:'山', strokes:3, pinyin:'shān', meaning:'山岳 / mountain', etymology:'象形字，像三座山峰并列的形状，中间高、两侧低。甲骨文已有此形。', oracle:true },
+  '水':{ radical:'水', strokes:4, pinyin:'shuǐ', meaning:'水流 / water', etymology:'象形字，像河流蜿蜒流动的样子，中间为主流，两侧为支流。', oracle:true },
+  '火':{ radical:'火', strokes:4, pinyin:'huǒ', meaning:'火焰 / fire', etymology:'象形字，像火焰燃烧的形状，上部为跳动的火苗，下部为燃烧点。', oracle:true },
+  '木':{ radical:'木', strokes:4, pinyin:'mù', meaning:'树木 / wood', etymology:'象形字，像一棵树的形状，上为枝叶，下为根系，中间为树干。', oracle:true },
+  '日':{ radical:'日', strokes:4, pinyin:'rì', meaning:'太阳 / sun', etymology:'象形字，甲骨文作圆形中有一点，表示太阳及其光芒，后演变为方形。', oracle:true },
+  '月':{ radical:'月', strokes:4, pinyin:'yuè', meaning:'月亮 / moon', etymology:'象形字，像月牙形状，甲骨文呈弯月形，中有一横表示月中之影。', oracle:true },
+  '土':{ radical:'土', strokes:3, pinyin:'tǔ', meaning:'土地 / earth', etymology:'象形字，像地面上堆起的土堆形状，下横为地，上横为土堆。', oracle:true },
+  '金':{ radical:'金', strokes:8, pinyin:'jīn', meaning:'金属 / gold', etymology:'象形兼会意字，像地下埋藏金属矿石的形状，四点表示金属碎片或光泽。', oracle:false },
+  '人':{ radical:'人', strokes:2, pinyin:'rén', meaning:'人类 / person', etymology:'象形字，像人侧身站立的形状，甲骨文即为简单的侧面人形。', oracle:true },
+  '口':{ radical:'口', strokes:3, pinyin:'kǒu', meaning:'嘴巴 / mouth', etymology:'象形字，像人张开嘴的形状，甲骨文作方形或圆形，表示口腔。', oracle:true },
+  '手':{ radical:'手', strokes:4, pinyin:'shǒu', meaning:'手 / hand', etymology:'象形字，像张开的手掌及五指形状，甲骨文清晰可见手指轮廓。', oracle:true },
+  '心':{ radical:'心', strokes:4, pinyin:'xīn', meaning:'心脏 / heart', etymology:'象形字，像心脏的形状，甲骨文有心室轮廓，后简化为现在写法。', oracle:true },
+  '目':{ radical:'目', strokes:5, pinyin:'mù', meaning:'眼睛 / eye', etymology:'象形字，像人眼的形状，甲骨文作竖置的椭圆形中有一横，表示眼球与瞳孔。', oracle:true },
+  '耳':{ radical:'耳', strokes:6, pinyin:'ěr', meaning:'耳朵 / ear', etymology:'象形字，像人耳的轮廓，甲骨文清晰呈现耳廓与耳道的形状。', oracle:true },
+  '足':{ radical:'足', strokes:7, pinyin:'zú', meaning:'脚 / foot', etymology:'会意字，上为"口"（膝盖），下为止（脚趾），合表脚和腿部。', oracle:true },
+  '刀':{ radical:'刀', strokes:2, pinyin:'dāo', meaning:'刀具 / knife', etymology:'象形字，像弯曲的刀形，甲骨文呈一弯一直的刀具形状。', oracle:true },
+  '弓':{ radical:'弓', strokes:3, pinyin:'gōng', meaning:'弓箭 / bow', etymology:'象形字，像弓的形状，甲骨文已有此形，表示弯曲的弓身。', oracle:true },
+  '矢':{ radical:'矢', strokes:5, pinyin:'shǐ', meaning:'箭 / arrow', etymology:'象形字，像箭的形状，上为箭头，下为箭羽，中为箭杆。', oracle:true },
+  '石':{ radical:'石', strokes:5, pinyin:'shí', meaning:'石头 / stone', etymology:'象形字，像山崖下的石块形状，上为山崖，下为落石。', oracle:true },
+  '田':{ radical:'田', strokes:5, pinyin:'tián', meaning:'田地 / field', etymology:'象形字，像农田被分割成小块的形状，纵横线表示田间阡陌。', oracle:true },
+  '力':{ radical:'力', strokes:2, pinyin:'lì', meaning:'力量 / strength', etymology:'象形字，像肌肉用力时鼓起的形状，或说像耕地农具犁的侧面形状。', oracle:true },
+  '又':{ radical:'又', strokes:2, pinyin:'yòu', meaning:'右手 / right hand', etymology:'象形字，像右手的形状，甲骨文清晰呈现三指弯曲的右手侧面。', oracle:true },
+  '女':{ radical:'女', strokes:3, pinyin:'nǚ', meaning:'女性 / woman', etymology:'象形字，像女子跪坐交手的形状，甲骨文表现古代女子端坐的姿态。', oracle:true },
+  '子':{ radical:'子', strokes:3, pinyin:'zǐ', meaning:'孩子 / child', etymology:'象形字，像婴孩的形状，头大体小，手臂伸开，甲骨文即有此形。', oracle:true },
+  '马':{ radical:'马', strokes:3, pinyin:'mǎ', meaning:'马 / horse', etymology:'象形字，甲骨文像马的侧面形状，可见鬃毛、四蹄，后经简化演变为现形。', oracle:true },
+  '牛':{ radical:'牛', strokes:4, pinyin:'niú', meaning:'牛 / ox', etymology:'象形字，像牛头正面形状，上为两角，中为头部，下为鼻面。', oracle:true },
+  '羊':{ radical:'羊', strokes:6, pinyin:'yáng', meaning:'羊 / sheep', etymology:'象形字，像羊头正面形状，上为两弯角，下为颜面，甲骨文形态清晰。', oracle:true },
+  '鱼':{ radical:'鱼', strokes:8, pinyin:'yú', meaning:'鱼 / fish', etymology:'象形字，像鱼的侧面轮廓，有头、身、鳍、尾各部，甲骨文已有较完整的鱼形。', oracle:true },
+  '鸟':{ radical:'鸟', strokes:5, pinyin:'niǎo', meaning:'鸟 / bird', etymology:'象形字，像鸟的侧面形状，有喙、翅、爪等特征，甲骨文已有较写实的鸟形。', oracle:true },
+  '虫':{ radical:'虫', strokes:6, pinyin:'chóng', meaning:'虫子 / insect', etymology:'象形字，本为蛇形，甲骨文像蛇的盘曲形状，后引申泛指各类爬行动物和昆虫。', oracle:true },
+  '明':{ radical:'日', strokes:8, pinyin:'míng', meaning:'明亮 / bright', etymology:'会意字，由"日"和"月"组成，日月同辉，表示光明、明亮之意。', oracle:true },
+  '森':{ radical:'木', strokes:12, pinyin:'sēn', meaning:'森林 / forest', etymology:'会意字，三个"木"字叠加，表示树木繁多、郁郁葱葱的大森林。', oracle:false },
+  '林':{ radical:'木', strokes:8, pinyin:'lín', meaning:'树林 / grove', etymology:'会意字，两个"木"字并列，表示树木丛生的树林。', oracle:false },
+  '淼':{ radical:'水', strokes:12, pinyin:'miǎo', meaning:'水势广大 / vast water', etymology:'会意字，三个"水"字叠加，形容水域宽广、烟波浩渺的景象。', oracle:false },
+  '焱':{ radical:'火', strokes:12, pinyin:'yàn', meaning:'火花 / flames', etymology:'会意字，三个"火"字叠加，表示火焰跳动、光焰明亮的样子。', oracle:false },
+  '鑫':{ radical:'金', strokes:24, pinyin:'xīn', meaning:'财富兴旺 / prosperity', etymology:'会意字，三个"金"字叠加，象征财富积累、兴旺发达，常用于人名店名。', oracle:false },
+  '品':{ radical:'口', strokes:9, pinyin:'pǐn', meaning:'品质 / quality', etymology:'会意字，三个"口"字叠加，本义为众多，引申为品类、品质、品格等义。', oracle:false },
+  '晶':{ radical:'日', strokes:12, pinyin:'jīng', meaning:'晶莹 / crystal', etymology:'会意字，三个"日"字叠加，形容光亮闪烁、晶莹透明如星光的样子。', oracle:false },
+  '众':{ radical:'人', strokes:6, pinyin:'zhòng', meaning:'众多 / multitude', etymology:'会意字，三个"人"字叠加，表示人数众多，引申为大众、群众之意。', oracle:false },
+  '炎':{ radical:'火', strokes:8, pinyin:'yán', meaning:'炎热 / scorching', etymology:'会意字，两个"火"字叠加，上火下火表示火势旺盛、极度炎热。', oracle:true },
+  '道':{ radical:'辶', strokes:12, pinyin:'dào', meaning:'道路 / way/tao', etymology:'会意兼形声字，由"辶"（行走）和"首"（头，引导）组成，本义为道路，引申为方法、规律、哲学概念。', oracle:false },
+  '德':{ radical:'彳', strokes:15, pinyin:'dé', meaning:'道德 / virtue', etymology:'会意字，从"彳"（行走）、"直"（正直）、"心"（内心），表示心正行直的品德。', oracle:false },
+  '美':{ radical:'羊', strokes:9, pinyin:'měi', meaning:'美丽 / beauty', etymology:'会意字，从"羊"从"大"，羊大为美，古人以肥美的羊为美好事物的象征。', oracle:true },
+  '善':{ radical:'羊', strokes:12, pinyin:'shàn', meaning:'善良 / goodness', etymology:'会意字，从"羊"从"言"，羊象征吉祥温顺，言表表达，合为说话温顺善良之意。', oracle:true },
+  '爱':{ radical:'心', strokes:10, pinyin:'ài', meaning:'爱 / love', etymology:'会意字，繁体"愛"从"心"从"受"，以心接受，表示爱护、喜爱之情。', oracle:false },
+  '天':{ radical:'大', strokes:4, pinyin:'tiān', meaning:'天空 / sky/heaven', etymology:'会意字，在"大"（人形）的头部加一横，指示头顶上方的天空，引申为天空、自然。', oracle:true },
+  '地':{ radical:'土', strokes:6, pinyin:'dì', meaning:'大地 / earth/ground', etymology:'形声字，从"土"表意，"也"表声，本义为大地、土地，与"天"相对。', oracle:false },
+  '风':{ radical:'风', strokes:4, pinyin:'fēng', meaning:'风 / wind', etymology:'形声兼象形字，甲骨文像凤鸟形，后借用表示风，加"虫"旁。', oracle:true },
+  '雨':{ radical:'雨', strokes:8, pinyin:'yǔ', meaning:'雨水 / rain', etymology:'象形字，像天空中降落雨滴的形状，上横为天，下点为雨滴。', oracle:true },
+  '云':{ radical:'云', strokes:4, pinyin:'yún', meaning:'云彩 / cloud', etymology:'象形字，甲骨文像云朵卷曲的形状，后来加"雨"头成"雲"，简化后恢复古形。', oracle:true },
+  '中':{ radical:'丨', strokes:4, pinyin:'zhōng', meaning:'中间 / middle', etymology:'象形字，像旗杆或箭矢穿过中心的形状，表示正中、居中之意。', oracle:true },
+  '大':{ radical:'大', strokes:3, pinyin:'dà', meaning:'大 / big', etymology:'象形字，像人张开双臂双腿站立的正面形象，表示宏大、高大。', oracle:true },
+  '小':{ radical:'小', strokes:3, pinyin:'xiǎo', meaning:'小 / small', etymology:'象形字，像细小沙粒或微小事物的形状，表示微小之意，与"大"相对。', oracle:true },
+  '龙':{ radical:'龙', strokes:5, pinyin:'lóng', meaning:'龙 / dragon', etymology:'象形字，甲骨文像一条张牙舞爪的巨龙形象，是中华文化中最重要的神兽符号。', oracle:true },
+};
+
+
+// IDS Decomposition
+var IDS = {
+  '明':['日','月'], '森':['木','木','木'], '淼':['水','水','水'],
+  '焱':['火','火','火'], '品':['口','口','口'], '晶':['日','日','日'],
+  '众':['人','人','人'], '林':['木','木'], '炎':['火','火'],
+  '双':['又','又'], '从':['人','人'], '好':['女','子'],
+  '鸣':['口','鸟'], '鲜':['鱼','羊'], '美':['羊','大'],
+  '善':['羊','言']
+};
+
+// Preset chips
+var PRESETS = ['山','水','火','木','日','月','人','心','道','美','爱','明','森','炎'];
+
+// State
+var currentScheme = 'parchment';
+var glyphCache = {};
+var animTimer = null;
+
+// DOM refs
+var canvas = document.getElementById('glyph-canvas');
+var ctx = canvas.getContext('2d');
+var charInput = document.getElementById('char-input');
+var status = document.getElementById('status');
+
+function setStatus(msg) { status.textContent = msg; }
+
+// ── Preset chips ──────────────────────────────────────────────────────────────
+var chipsEl = document.getElementById('preset-chips');
+PRESETS.forEach(function(ch) {
+  var btn = document.createElement('button');
+  btn.className = 'chip';
+  btn.textContent = ch;
+  btn.addEventListener('click', function() {
+    charInput.value = ch;
+    generate();
+  });
+  chipsEl.appendChild(btn);
+});
+
+// ── Scheme buttons ────────────────────────────────────────────────────────────
+document.getElementById('scheme-group').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-scheme]');
+  if (!btn) return;
+  document.querySelectorAll('#scheme-group .btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentScheme = btn.dataset.scheme;
+  var ch = charInput.value.trim();
+  if (ch && glyphCache[ch]) {
+    drawPoster(ch, glyphCache[ch], ETYM[ch] || null);
+  }
+});
+
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+var isDark = false;
+document.getElementById('btn-theme').addEventListener('click', function() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : '');
+  this.textContent = isDark ? '☀' : '☽';
+});
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-generate').addEventListener('click', generate);
+charInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') generate(); });
+
+function generate() {
+  var ch = charInput.value.trim();
+  if (!ch) { setStatus('Please enter a character.'); return; }
+  // Take only first character
+  ch = ch[0];
+  charInput.value = ch;
+  setStatus('Loading stroke data...');
+  fetchGlyph(ch, function(data) {
+    if (!data) {
+      setStatus('No stroke data available for this character.');
+      // Draw poster with no stroke data
+      drawPoster(ch, null, ETYM[ch] || null);
+      return;
+    }
+    setStatus('');
+    var animOn = document.getElementById('tog-anim').checked;
+    if (animOn) {
+      animatePoster(ch, data, ETYM[ch] || null);
+    } else {
+      drawPoster(ch, data, ETYM[ch] || null);
+    }
+  });
+}
+
+// ── Fetch glyph data ──────────────────────────────────────────────────────────
+function fetchGlyph(ch, callback) {
+  if (glyphCache[ch] !== undefined) {
+    callback(glyphCache[ch]);
+    return;
+  }
+  var codepoint = ch.codePointAt(0).toString(16).toUpperCase();
+  var url = 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@latest/' + encodeURIComponent(ch) + '.json';
+  fetch(url)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
+    .then(function(data) {
+      glyphCache[ch] = data;
+      callback(data);
+    })
+    .catch(function() {
+      glyphCache[ch] = null;
+      callback(null);
+    });
+}
+
+// ── Draw poster ───────────────────────────────────────────────────────────────
+function drawPoster(ch, data, etymInfo) {
+  if (animTimer) { clearTimeout(animTimer); animTimer = null; }
+  var sc = SCHEMES[currentScheme];
+  var W = 520, H = 680;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = sc.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Paper grain (LCG noise dots)
+  var lcgState = 12345;
+  function lcgRand() { lcgState = (lcgState * 1664525 + 1013904223) & 0xffffffff; return (lcgState >>> 0) / 0xffffffff; }
+  ctx.save();
+  for (var i = 0; i < 3500; i++) {
+    var px = lcgRand() * W;
+    var py = lcgRand() * H;
+    var alpha = lcgRand() * 0.04 + 0.01;
+    ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
+    ctx.fillRect(px, py, 1, 1);
+  }
+  ctx.restore();
+
+  // Horizontal ruled lines
+  ctx.save();
+  ctx.strokeStyle = sc.ruled;
+  ctx.lineWidth = 0.5;
+  for (var y = 20; y < H; y += 18) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Watermark "GLYPH"
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(-Math.PI / 4);
+  ctx.font = 'bold 96px Outfit, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = sc.watermark;
+  ctx.fillText('GLYPH', 0, 0);
+  ctx.restore();
+
+  // L-bracket corner ornaments
+  var cLen = 18, cGap = 10, cW = 1.5;
+  ctx.save();
+  ctx.strokeStyle = sc.muted;
+  ctx.lineWidth = cW;
+  ctx.globalAlpha = 0.4;
+  // Top-left
+  ctx.beginPath(); ctx.moveTo(cGap + cLen, cGap); ctx.lineTo(cGap, cGap); ctx.lineTo(cGap, cGap + cLen); ctx.stroke();
+  // Top-right
+  ctx.beginPath(); ctx.moveTo(W - cGap - cLen, cGap); ctx.lineTo(W - cGap, cGap); ctx.lineTo(W - cGap, cGap + cLen); ctx.stroke();
+  // Bottom-left
+  ctx.beginPath(); ctx.moveTo(cGap + cLen, H - cGap); ctx.lineTo(cGap, H - cGap); ctx.lineTo(cGap, H - cGap - cLen); ctx.stroke();
+  // Bottom-right
+  ctx.beginPath(); ctx.moveTo(W - cGap - cLen, H - cGap); ctx.lineTo(W - cGap, H - cGap); ctx.lineTo(W - cGap, H - cGap - cLen); ctx.stroke();
+  ctx.restore();
+
+  // Main character (strokes or fallback)
+  var charSize = 200;
+  var charCX = W / 2, charCY = 155;
+
+  var showStrokeOrder = document.getElementById('tog-strokes').checked;
+  var showEtym = document.getElementById('tog-etym').checked;
+
+  if (data && data.strokes && data.strokes.length > 0) {
+    renderStrokes(ctx, data.strokes, charCX, charCY, charSize, sc.palette, null);
+
+    // Stroke count badge (top-right)
+    var badgeR = 18;
+    var bx = W - 36, by = 36;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
+    ctx.fillStyle = sc.badge;
+    ctx.fill();
+    ctx.font = 'bold 14px Outfit, sans-serif';
+    ctx.fillStyle = sc.badgeText;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(data.strokes.length, bx, by);
+    ctx.restore();
+
+    // Small stroke order diagrams
+    if (showStrokeOrder) {
+      var smSize = 26, smCols = 8, smStartX = 36, smStartY = 30, smGap = 6;
+      var totalW = Math.min(data.strokes.length, smCols) * (smSize + smGap);
+      var offsetX = (W - totalW) / 2;
+      data.strokes.forEach(function(_, idx) {
+        var col = idx % smCols;
+        var row = Math.floor(idx / smCols);
+        var sx = offsetX + col * (smSize + smGap) + smSize / 2;
+        var sy = smStartY + row * (smSize + smGap + 10) + smSize / 2;
+        // Draw strokes up to this index faded, then current stroke solid
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(sx - smSize / 2 - 1, sy - smSize / 2 - 1, smSize + 2, smSize + 2);
+        ctx.clip();
+        renderStrokes(ctx, data.strokes.slice(0, idx), sx, sy, smSize, [sc.muted], [0.2]);
+        renderStrokes(ctx, [data.strokes[idx]], sx, sy, smSize, [sc.palette[idx % sc.palette.length]], [0.9]);
+        ctx.restore();
+        // Number
+        ctx.save();
+        ctx.font = '7px Outfit, sans-serif';
+        ctx.fillStyle = sc.muted;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(idx + 1, sx, sy + smSize / 2 + 1);
+        ctx.restore();
+      });
+    }
+  } else {
+    // Fallback: draw character using canvas font
+    ctx.save();
+    ctx.font = charSize + 'px "Noto Serif SC", serif';
+    ctx.fillStyle = sc.ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ch, charCX, charCY);
+    ctx.restore();
+  }
+
+  // ── Info block (y: 290–420) ────────────────────────────────────────────────
+  if (etymInfo && showEtym) {
+    var infoY = 290;
+
+    // Pinyin
+    ctx.save();
+    ctx.font = 'bold 28px Outfit, sans-serif';
+    ctx.fillStyle = sc.accent;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(etymInfo.pinyin, 40, infoY);
+    ctx.restore();
+
+    // Meaning
+    ctx.save();
+    ctx.font = '14px "Noto Serif SC", serif';
+    ctx.fillStyle = sc.ink;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(etymInfo.meaning, 40, infoY + 36);
+    ctx.restore();
+
+    // Divider
+    ctx.save();
+    ctx.strokeStyle = sc.accent;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(40, infoY + 60);
+    ctx.lineTo(W - 40, infoY + 60);
+    ctx.stroke();
+    ctx.restore();
+
+    // Oracle/script era badge
+    var eraText = etymInfo.oracle ? 'Oracle Bone Script  甲骨文' : 'Bronze / Seal Script  金文';
+    ctx.save();
+    ctx.font = '10px Outfit, sans-serif';
+    ctx.fillStyle = sc.muted;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(eraText, W - 40, infoY);
+    ctx.restore();
+
+    // Etymology text (wrapped)
+    ctx.save();
+    ctx.font = '12px "Noto Serif SC", serif';
+    ctx.fillStyle = sc.ink;
+    ctx.globalAlpha = 0.75;
+    wrapText(ctx, etymInfo.etymology, 40, infoY + 74, W - 80, 18);
+    ctx.restore();
+  } else if (!etymInfo && showEtym) {
+    // No entry: just show the character name
+    ctx.save();
+    ctx.font = 'bold 22px Outfit, sans-serif';
+    ctx.fillStyle = sc.accent;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(ch, 40, 295);
+    ctx.font = '12px "Noto Serif SC", serif';
+    ctx.fillStyle = sc.muted;
+    ctx.textBaseline = 'top';
+    ctx.fillText('No etymology data in embedded dictionary.', 40, 330);
+    ctx.restore();
+  }
+
+  // ── Radical / decomposition (y: 430–540) ──────────────────────────────────
+  var decomp = IDS[ch];
+  if (decomp && decomp.length > 0) {
+    ctx.save();
+    ctx.font = '11px Outfit, sans-serif';
+    ctx.fillStyle = sc.muted;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Composition  由以下部件组成', 40, 434);
+    ctx.restore();
+
+    // Divider
+    ctx.save();
+    ctx.strokeStyle = sc.muted;
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.moveTo(40, 452);
+    ctx.lineTo(W - 40, 452);
+    ctx.stroke();
+    ctx.restore();
+
+    // Component chars
+    var decompUniq = [];
+    var seen = {};
+    decomp.forEach(function(c) {
+      if (!seen[c]) { seen[c] = 0; }
+      seen[c]++;
+    });
+    Object.keys(seen).forEach(function(c) {
+      decompUniq.push({ ch: c, count: seen[c] });
+    });
+
+    var compX = 40, compY = 460;
+    var compSize = 40;
+    decompUniq.forEach(function(item, i) {
+      var cx = compX + i * (compSize + 32);
+      // Box
+      ctx.save();
+      ctx.strokeStyle = sc.accent;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.5;
+      ctx.strokeRect(cx, compY, compSize, compSize);
+      ctx.restore();
+      // Character
+      ctx.save();
+      ctx.font = compSize * 0.7 + 'px "Noto Serif SC", serif';
+      ctx.fillStyle = sc.ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.ch, cx + compSize / 2, compY + compSize / 2);
+      ctx.restore();
+      // Count
+      if (item.count > 1) {
+        ctx.save();
+        ctx.font = '10px Outfit, sans-serif';
+        ctx.fillStyle = sc.accent;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('x' + item.count, cx + compSize + 4, compY + compSize / 2 - 5);
+        ctx.restore();
+      }
+      // Etymology radical label
+      var compEtym = ETYM[item.ch];
+      if (compEtym) {
+        ctx.save();
+        ctx.font = '9px "Noto Serif SC", serif';
+        ctx.fillStyle = sc.muted;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(compEtym.meaning.split(' / ')[0], cx + compSize / 2, compY + compSize + 3);
+        ctx.restore();
+      }
+    });
+
+    // Caption
+    var caption = '由「' + decomp.join('」「') + '」组成';
+    ctx.save();
+    ctx.font = '11px "Noto Serif SC", serif';
+    ctx.fillStyle = sc.muted;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(caption, 40, compY + compSize + 20);
+    ctx.restore();
+  }
+
+  // ── Bottom strip (y: 610–655) ──────────────────────────────────────────────
+  ctx.save();
+  ctx.strokeStyle = sc.muted;
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(40, 615);
+  ctx.lineTo(W - 40, 615);
+  ctx.stroke();
+  ctx.restore();
+
+  var codepoint = 'U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+  ctx.save();
+  ctx.font = '11px Outfit, monospace';
+  ctx.fillStyle = sc.muted;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(codepoint, 40, 622);
+  if (data && data.strokes) {
+    ctx.fillText(data.strokes.length + ' strokes', 120, 622);
+  } else if (etymInfo) {
+    ctx.fillText(etymInfo.strokes + ' strokes', 120, 622);
+  }
+  ctx.textAlign = 'right';
+  ctx.fillStyle = sc.accent;
+  ctx.font = 'bold 11px Outfit, sans-serif';
+  ctx.fillText('Glyph It', W - 40, 622);
+  ctx.restore();
+}
+
+// ── Render strokes ────────────────────────────────────────────────────────────
+function renderStrokes(ctx, strokes, cx, cy, size, palette, alphas) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(size / 1024, -size / 1024);
+  ctx.translate(-512, -512);
+  strokes.forEach(function(pathStr, i) {
+    var color = palette[i % palette.length];
+    var alpha = alphas ? (alphas[i] !== undefined ? alphas[i] : alphas[0]) : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    try {
+      ctx.fill(new Path2D(pathStr));
+    } catch(e) {}
+    ctx.restore();
+  });
+  ctx.restore();
+}
+
+// ── Animate strokes ───────────────────────────────────────────────────────────
+function animatePoster(ch, data, etymInfo) {
+  if (!data || !data.strokes || data.strokes.length === 0) {
+    drawPoster(ch, data, etymInfo);
+    return;
+  }
+  var sc = SCHEMES[currentScheme];
+  var delay = 300;
+  var total = data.strokes.length;
+  var step = 0;
+
+  function drawStep() {
+    // Draw background elements once
+    var fakeData = { strokes: data.strokes.slice(0, step + 1) };
+    drawPoster(ch, fakeData, etymInfo);
+    step++;
+    if (step < total) {
+      animTimer = setTimeout(drawStep, delay);
+    } else {
+      // Final draw with full data
+      drawPoster(ch, data, etymInfo);
+    }
+  }
+  drawStep();
+}
+
+// ── Wrap text helper ──────────────────────────────────────────────────────────
+function wrapText(ctx, text, x, y, maxWidth, lineH) {
+  var words = text.split('');
+  var line = '';
+  var lineY = y;
+  for (var i = 0; i < words.length; i++) {
+    var testLine = line + words[i];
+    var metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && line.length > 0) {
+      ctx.fillText(line, x, lineY);
+      line = words[i];
+      lineY += lineH;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) ctx.fillText(line, x, lineY);
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function exportPNG() {
+  var ch = charInput.value.trim() || 'glyph';
+  var link = document.createElement('a');
+  link.download = 'glyph-' + ch + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+document.getElementById('btn-export-hdr').addEventListener('click', exportPNG);
+document.getElementById('btn-export-panel').addEventListener('click', exportPNG);
+
+// ── Initial render ────────────────────────────────────────────────────────────
+(function() {
+  var initChar = '木';
+  charInput.value = initChar;
+  setStatus('Loading...');
+  fetchGlyph(initChar, function(data) {
+    setStatus('');
+    drawPoster(initChar, data, ETYM[initChar] || null);
+  });
+})();
+
+})();
+</script>
+</body>
+</html>
