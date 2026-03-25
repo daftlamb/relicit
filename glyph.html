@@ -108,7 +108,7 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 // Color Schemes
 var SCHEMES = {
   parchment: { bg:'#f5efe0', ink:'#2a1a0e', accent:'#8b4513', muted:'#b89870', ruled:'rgba(139,69,19,0.06)', watermark:'rgba(139,69,19,0.04)', badge:'#8b4513', badgeText:'#f5efe0', palette:['#2a1a0e','#8b4513','#4a6741','#1a3a5c','#5c3a6b','#6b4a1a','#2a4a4a','#5c4a2a'] },
-  ink:       { bg:'#1a1208', ink:'#f0c060', accent:'#c8941a', muted:'#7a6040', ruled:'rgba(200,148,26,0.06)', watermark:'rgba(200,148,26,0.04)', badge:'#c8941a', badgeText:'#1a1208', palette:['#f0c060','#e8a020','#d4701a','#c0a040','#e0d080','#d08020','#c0c040','#e0b060'] },
+  ink:       { bg:'#f5c800', ink:'#1a1208', accent:'#1a1208', muted:'#7a6010', ruled:'rgba(0,0,0,0.06)', watermark:'rgba(0,0,0,0.04)', badge:'#1a1208', badgeText:'#f5c800', palette:['#1a1208','#2a2010','#0a0a08','#1a1008','#221808','#181208','#100e06','#201808'] },
   night:     { bg:'#0d0d1a', ink:'#a0e0ff', accent:'#00ffcc', muted:'#406080', ruled:'rgba(0,255,204,0.04)', watermark:'rgba(0,255,204,0.03)', badge:'#00ffcc', badgeText:'#0d0d1a', palette:['#a0e0ff','#00ffcc','#ff80c0','#80ffaa','#c0a0ff','#ffcc40','#40e0d0','#ff8040'] },
   minimal:   { bg:'#ffffff', ink:'#111111', accent:'#333333', muted:'#aaaaaa', ruled:'rgba(0,0,0,0.04)', watermark:'rgba(0,0,0,0.03)', badge:'#333333', badgeText:'#ffffff', palette:['#111111','#333333','#555555','#222222','#444444','#666666','#1a1a1a','#2a2a2a'] }
 };
@@ -287,32 +287,81 @@ function fetchGlyph(ch, callback) {
     });
 }
 
-// ── Particle dissolve: sample stroke path into dot cloud ─────────────────────
-function sampleStroke(strokePath, size) {
+// ── Ink stroke renderer: solid fill + internal void holes (stamp/ink effect) ─
+function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
+  // Draw to offscreen canvas so we can punch holes with destination-out
   var ofc = document.createElement('canvas');
   ofc.width = size; ofc.height = size;
   var ofx = ofc.getContext('2d');
+
+  // Fill stroke solid
   ofx.save();
-  ofx.translate(size / 2, size / 2);
-  ofx.scale(size / 1024, -size / 1024);
+  ofx.translate(size/2, size/2);
+  ofx.scale(size/1024, -size/1024);
   ofx.translate(-512, -512);
   ofx.fillStyle = '#000';
   try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
   ofx.restore();
-  var imgData = ofx.getImageData(0, 0, size, size);
-  var pts = [];
-  for (var py = 0; py < size; py += 2) {
-    for (var px = 0; px < size; px += 2) {
-      var idx = (py * size + px) * 4;
-      if (imgData.data[idx + 3] > 80) {
-        pts.push([px, py]);
-      }
-    }
+
+  // Punch random voids (destination-out) — ink absorption simulation
+  var hs = holeSeed;
+  function hr() { hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
+  ofx.globalCompositeOperation = 'destination-out';
+  // Large voids (ink pools / dry patches)
+  var nLarge = 3 + Math.floor(hr()*5);
+  for (var i=0; i<nLarge; i++) {
+    var vx = hr()*size, vy = hr()*size;
+    var vr = size*(0.04 + hr()*0.10);
+    var va = 0.5 + hr()*0.45;
+    ofx.globalAlpha = va;
+    ofx.beginPath(); ofx.arc(vx, vy, vr, 0, Math.PI*2); ofx.fill();
   }
-  return pts;
+  // Small grain voids
+  var nSmall = 20 + Math.floor(hr()*30);
+  for (var j=0; j<nSmall; j++) {
+    var sx2 = hr()*size, sy2 = hr()*size;
+    var sr2 = size*(0.008 + hr()*0.025);
+    ofx.globalAlpha = 0.4 + hr()*0.5;
+    ofx.beginPath(); ofx.arc(sx2, sy2, sr2, 0, Math.PI*2); ofx.fill();
+  }
+  ofx.globalCompositeOperation = 'source-over';
+  ofx.globalAlpha = 1;
+
+  // Edge splatter: small dots around stroke on offscreen
+  // (drawn separately so they can overflow the stroke boundary)
+  var nSplat = 8 + Math.floor(hr()*12);
+  for (var k=0; k<nSplat; k++) {
+    var angle = hr()*Math.PI*2;
+    var dist = size*(0.35 + hr()*0.25);
+    var spx = size/2 + Math.cos(angle)*dist;
+    var spy = size/2 + Math.sin(angle)*dist;
+    var spr = size*(0.004 + hr()*0.012);
+    ofx.globalAlpha = 0.2 + hr()*0.5;
+    ofx.fillStyle = '#000';
+    ofx.beginPath(); ofx.arc(spx, spy, spr, 0, Math.PI*2); ofx.fill();
+  }
+  ofx.globalAlpha = 1;
+
+  // Composite onto main canvas
+  ctx.save();
+  ctx.globalAlpha = 0.85 + hr()*0.15;
+  // Tint: colorize via globalCompositeOperation trick — draw colored rect then multiply
+  // Simpler: just draw offscreen as-is but tinted with fillStyle via shadow
+  ctx.drawImage(ofc, cx - size/2, cy - size/2);
+  ctx.restore();
+
+  // Color tint overlay (multiply-like: draw stroke shape in ink color at low opacity)
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.fillStyle = inkCol;
+  ctx.translate(cx, cy);
+  ctx.scale(size/1024, -size/1024);
+  ctx.translate(-512, -512);
+  try { ctx.fill(new Path2D(strokePath)); } catch(e) {}
+  ctx.restore();
 }
 
-// ── Draw poster — particle dissolve, scattered, no rotation ──────────────────
+// ── Draw poster — ink stamp style ────────────────────────────────────────────
 function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   if (animTimer) { clearTimeout(animTimer); animTimer = null; }
   var sc = SCHEMES[currentScheme];
@@ -321,8 +370,8 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
 
   // ── Ink color system ────────────────────────────────────────────────────────
   var inkPalettes = {
-    parchment: { dark:[26,18,8],    light:[122,80,48]  },
-    ink:       { dark:[240,200,64], light:[200,120,32] },
+    parchment: { dark:[26,18,8],    light:[80,50,20]  },
+    ink:       { dark:[10,8,4],     light:[40,30,10]  },
     night:     { dark:[192,216,255], light:[96,144,208] },
     minimal:   { dark:[17,17,17],   light:[136,136,136] }
   };
@@ -401,25 +450,12 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   }
 
   if (strokes.length > 0) {
-    // ── Particle dissolve pass ──────────────────────────────────────────────
+    // ── Ink stamp pass ────────────────────────────────────────────────────────
     for (var si = 0; si < strokeLimit; si++) {
       var sl = layout[si];
-      var pts = sampleStroke(strokes[si], sl.size);
-      if (!pts || pts.length === 0) continue;
-      var dotColor = inkColor(sl.depth);
-      var ox = sl.cx - sl.size / 2;
-      var oy = sl.cy - sl.size / 2;
-      ctx.fillStyle = dotColor;
-      for (var di = 0; di < pts.length; di++) {
-        var r = 1.2 + Math.random() * 1.4;
-        var a = (0.5 + Math.random() * 0.45) * alphaScale;
-        ctx.globalAlpha = a;
-        ctx.beginPath();
-        ctx.arc(ox + pts[di][0], oy + pts[di][1], r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      var holeSeed = seed + si * 7919;
+      renderInkStroke(ctx, strokes[si], sl.cx, sl.cy, sl.size, inkColor(sl.depth), holeSeed);
     }
-    ctx.globalAlpha = 1;
   } else {
     // Fallback: font render when no stroke data
     ctx.save();
@@ -495,8 +531,8 @@ function animatePoster(ch, data, etymInfo) {
   }
 
   var inkPalettes2 = {
-    parchment: { dark:[26,18,8],    light:[122,80,48]  },
-    ink:       { dark:[240,200,64], light:[200,120,32] },
+    parchment: { dark:[26,18,8],    light:[80,50,20]  },
+    ink:       { dark:[10,8,4],     light:[40,30,10]  },
     night:     { dark:[192,216,255], light:[96,144,208] },
     minimal:   { dark:[17,17,17],   light:[136,136,136] }
   };
