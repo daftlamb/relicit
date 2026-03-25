@@ -355,15 +355,13 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
     ofx.textAlign = 'center';
     ofx.textBaseline = 'middle';
     ofx.fillStyle = '#000';
-    // hanzi-writer Y is bottom-up (0=bottom,1024=top); char bbox center ≈ y=412/1024
-    // After Y-flip to canvas: canvasY = size*(1 - 412/1024) = size*0.598
-    // X center ≈ 525/1024 ≈ 0.513
-    ofx.fillText(fontChar, size * 0.513, size * 0.598);
+    ofx.fillText(fontChar, size/2, size/2);
     // Mask: keep only pixels inside this stroke's path
     ofx.globalCompositeOperation = 'destination-in';
     ofx.save();
-    ofx.translate(0, size);       // Y-flip: origin to bottom-left
+    ofx.translate(size/2, size/2);
     ofx.scale(size/1024, -size/1024);
+    ofx.translate(-512, -512);
     ofx.fillStyle = '#000';
     try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
     ofx.restore();
@@ -806,12 +804,11 @@ function animatePoster(ch, data, etymInfo) {
       ofx2.font = Math.round(sl2.size*0.88)+'px '+fstr2;
       ofx2.textAlign='center'; ofx2.textBaseline='middle';
       ofx2.fillStyle='#000';
-      ofx2.fillText(ch, sl2.size*0.513, sl2.size*0.598);
+      ofx2.fillText(ch, sl2.size/2, sl2.size/2);
       ofx2.globalCompositeOperation='destination-in';
-      ofx2.save();
-      ofx2.translate(0, sl2.size);
+      ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
       ofx2.scale(sl2.size/1024,-sl2.size/1024);
-      ofx2.fillStyle='#000';
+      ofx2.translate(-512,-512); ofx2.fillStyle='#000';
       try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
       ofx2.restore();
       ofx2.globalCompositeOperation='source-over';
