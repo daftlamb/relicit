@@ -81,15 +81,6 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
       </div>
     </div>
     <div class="panel-section">
-      <div class="section-title">Font</div>
-      <div class="btn-group" id="font-group">
-        <button class="btn active" data-font="stroke">楷书 (Stroke)</button>
-        <button class="btn" data-font="serif">宋体 Serif</button>
-        <button class="btn" data-font="sans">黑体 Sans</button>
-        <button class="btn" data-font="traditional">繁体 Trad</button>
-      </div>
-    </div>
-    <div class="panel-section">
       <div class="section-title">Display</div>
       <div class="toggle-row">
         <span>Show stroke order</span>
@@ -203,17 +194,9 @@ var PRESETS = ['山','水','火','木','日','月','人','心','道','美','爱'
 
 // State
 var currentScheme = 'parchment';
-var currentFont = 'stroke'; // stroke | serif | sans | traditional
 var glyphCache = {};
 var animTimer = null;
 
-// Font definitions for canvas rendering
-var FONTS = {
-  stroke:      null, // uses hanzi-writer stroke data
-  serif:       '"Noto Serif SC", "SimSun", serif',
-  sans:        '"Noto Sans SC", "SimHei", sans-serif',
-  traditional: '"Noto Serif SC", "MingLiU", serif'
-};
 
 // DOM refs
 var canvas = document.getElementById('glyph-canvas');
@@ -257,23 +240,6 @@ document.getElementById('scheme-group').addEventListener('click', function(e) {
   }
 });
 
-// ── Font selector ─────────────────────────────────────────────────────────────
-document.getElementById('font-group').addEventListener('click', function(e) {
-  var btn = e.target.closest('[data-font]');
-  if (!btn) return;
-  document.querySelectorAll('#font-group .btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  currentFont = btn.dataset.font;
-  var ch = charInput.value.trim();
-  if (ch) {
-    if (currentFont === 'stroke' && glyphCache[ch]) {
-      drawPoster(ch, glyphCache[ch], ETYM[ch] || null);
-    } else if (currentFont !== 'stroke') {
-      drawPosterFont(ch, ETYM[ch] || null);
-    }
-  }
-});
-
 // ── Theme toggle ──────────────────────────────────────────────────────────────
 var isDark = false;
 document.getElementById('btn-theme').addEventListener('click', function() {
@@ -292,18 +258,11 @@ function generate() {
   ch = ch[0];
   charInput.value = ch;
 
-  // Font mode: render directly from browser font, no stroke data needed
-  if (currentFont !== 'stroke') {
-    setStatus('');
-    drawPosterFont(ch, ETYM[ch] || null);
-    return;
-  }
-
   setStatus('Loading stroke data...');
   fetchGlyph(ch, function(data) {
     if (!data) {
-      setStatus('No stroke data, rendering with font...');
-      drawPosterFont(ch, ETYM[ch] || null);
+      setStatus('No stroke data for this character.');
+      drawPoster(ch, null, ETYM[ch] || null);
       return;
     }
     setStatus('');
@@ -338,7 +297,7 @@ function fetchGlyph(ch, callback) {
 
 // ── Ink wash renderer: splatter dots inside stroke path — sumi-e style ────────
 // depthFocus: 0.0=far(sparse,small dots) 1.0=near(dense,larger dots)
-function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthFocus, fontChar) {
+function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthFocus) {
   if (depthFocus === undefined) depthFocus = 0.7;
   // depthFocus controls: dot density keep%, dot size, jitter amount
   // fontChar: if set, use font glyph pixels masked by strokePath (method Y)
@@ -348,25 +307,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
   ofc.width = size; ofc.height = size;
   var ofx = ofc.getContext('2d');
 
-  if (fontChar && currentFont !== 'stroke') {
-    // Method Y: render font char full-size, then mask with hanzi-writer stroke path
-    var fontStr = FONTS[currentFont] || FONTS.serif;
-    ofx.font = Math.round(size * 0.88) + 'px ' + fontStr;
-    ofx.textAlign = 'center';
-    ofx.textBaseline = 'middle';
-    ofx.fillStyle = '#000';
-    ofx.fillText(fontChar, size/2, size/2);
-    // Mask: keep only pixels inside this stroke's path
-    ofx.globalCompositeOperation = 'destination-in';
-    ofx.save();
-    ofx.translate(size/2, size/2);
-    ofx.scale(size/1024, -size/1024);
-    ofx.translate(-512, -512);
-    ofx.fillStyle = '#000';
-    try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
-    ofx.restore();
-    ofx.globalCompositeOperation = 'source-over';
-  } else {
+
     // Default: use hanzi-writer stroke path directly
     ofx.save();
     ofx.translate(size/2, size/2);
@@ -375,7 +316,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
     ofx.fillStyle = '#000';
     try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
     ofx.restore();
-  }
+  
 
   var imgData = ofx.getImageData(0, 0, size, size);
 
@@ -467,115 +408,6 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
     ctx.beginPath(); ctx.arc(spx, spy, spr, 0, Math.PI*2); ctx.fill();
   }
   ctx.globalAlpha = 1;
-}
-
-// ── Font-based poster: render whole char with browser font → ink wash scatter ─
-function drawPosterFont(ch, etymInfo) {
-  if (animTimer) { clearTimeout(animTimer); animTimer = null; }
-  var sc = SCHEMES[currentScheme];
-  var W = 720, H = 1020;
-  ctx.clearRect(0, 0, W, H);
-
-  var ip = {
-    parchment: { dark:[26,18,8],    light:[80,50,20]  },
-    ink:       { dark:[10,8,4],     light:[40,30,10]  },
-    night:     { dark:[192,216,255],light:[96,144,208] },
-    minimal:   { dark:[17,17,17],   light:[100,100,100]},
-    crimson:   { dark:[255,68,85],  light:[180,20,40]  },
-    forest:    { dark:[125,220,138],light:[40,120,55]  },
-    dusk:      { dark:[224,170,255],light:[140,80,200] },
-    paper:     { dark:[26,42,74],   light:[80,110,160] }
-  }[currentScheme] || { dark:[26,18,8], light:[80,50,20] };
-
-  function inkColor(t) {
-    return 'rgb('+Math.round(ip.light[0]+(ip.dark[0]-ip.light[0])*t)+','+
-                  Math.round(ip.light[1]+(ip.dark[1]-ip.light[1])*t)+','+
-                  Math.round(ip.light[2]+(ip.dark[2]-ip.light[2])*t)+')';
-  }
-
-  // Background + grain
-  ctx.fillStyle = sc.bg; ctx.fillRect(0,0,W,H);
-  var gs = 99991; function gr(){gs=(gs*1664525+1013904223)&0x7fffffff;return gs/0x7fffffff;}
-  for (var gi=0;gi<1200;gi++){
-    ctx.fillStyle='rgba(80,50,20,'+(0.01+gr()*0.03)+')';
-    ctx.fillRect(gr()*W,gr()*H,1,1);
-  }
-
-  var fontStr = FONTS[currentFont] || FONTS.serif;
-  var seed = ch.codePointAt(0);
-  function sr(){seed=(seed*1664525+1013904223)&0x7fffffff;return seed/0x7fffffff;}
-
-  // Render the character 3–5 times at different sizes/positions/depths
-  var N = 4;
-  var inkR=ip.dark[0], inkG=ip.dark[1], inkB=ip.dark[2];
-
-  for (var i=0; i<N; i++) {
-    // Large character, centered with random offset
-    var sz = Math.round(W * (0.7 + sr()*0.6));
-    var cx = W*0.5 + (sr()-0.5)*W*0.25;
-    var cy = (H-56)*0.5 + (sr()-0.5)*(H-56)*0.2;
-    var depthFocus = 0.2 + sr()*0.8;
-
-    // Render char to offscreen
-    var ofc = document.createElement('canvas');
-    ofc.width = sz; ofc.height = sz;
-    var ofx = ofc.getContext('2d');
-    ofx.font = Math.round(sz*0.85)+'px '+fontStr;
-    ofx.textAlign = 'center';
-    ofx.textBaseline = 'middle';
-    ofx.fillStyle = '#000';
-    ofx.fillText(ch, sz/2, sz/2);
-
-    var imgData = ofx.getImageData(0, 0, sz, sz);
-    var hs = seed + i*7919;
-    function hr(){ hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
-
-    var ox = cx - sz/2, oy = cy - sz/2;
-    var keepRate = 0.2 + depthFocus*0.55;
-    var blurAmt = (1-depthFocus)*sz*0.18;
-
-    for (var py=0; py<sz; py+=1) {
-      for (var px2=0; px2<sz; px2+=1) {
-        var pidx = (py*sz+px2)*4;
-        if (imgData.data[pidx+3] < 60) continue;
-        if (hr() > keepRate) continue;
-
-        var edgeF = imgData.data[pidx+3]/255;
-        var baseR2 = (0.2+depthFocus*0.5)+hr()*(0.3+depthFocus*0.4);
-        var r2 = baseR2*(0.6+edgeF*0.4);
-
-        var edgeSc = (1-edgeF);
-        var scR = blurAmt*(edgeSc*0.7+0.3);
-        var dxC=px2-sz/2, dyC=py-sz/2;
-        var distC=Math.sqrt(dxC*dxC+dyC*dyC)||1;
-        var scX=(dxC/distC)*scR*(0.4+hr()*0.6);
-        var scY=(dyC/distC)*scR*(0.4+hr()*0.6);
-        var jit=r2*(0.8+(1-depthFocus)*1.5);
-        var jx=scX+(hr()-0.5)*jit, jy=scY+(hr()-0.5)*jit;
-
-        var al=(0.3+depthFocus*0.4+hr()*0.3)*(0.5+edgeF*0.5);
-        var cr2=Math.min(255,inkR+Math.round((hr()-0.5)*20));
-        var cg2=Math.min(255,inkG+Math.round((hr()-0.5)*12));
-        var cb2=Math.min(255,inkB+Math.round((hr()-0.5)*8));
-
-        ctx.globalAlpha=al;
-        ctx.fillStyle='rgb('+cr2+','+cg2+','+cb2+')';
-        ctx.beginPath();
-        if (hr()>0.85){ctx.ellipse(ox+px2+jx,oy+py+jy,r2*1.4,r2*0.5,hr()*Math.PI,0,Math.PI*2);}
-        else{ctx.arc(ox+px2+jx,oy+py+jy,r2,0,Math.PI*2);}
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha=1;
-  }
-
-  // Bottom strip
-  var stripH=56, stripY=H-stripH;
-  ctx.save(); ctx.fillStyle=inkColor(0.95); ctx.globalAlpha=0.88; ctx.fillRect(0,stripY,W,stripH); ctx.restore();
-  ctx.save(); ctx.font='bold 38px "Noto Serif SC",serif'; ctx.fillStyle=sc.bg; ctx.globalAlpha=0.9; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(ch,20,stripY+stripH/2); ctx.restore();
-  if(etymInfo&&etymInfo.pinyin){ctx.save();ctx.font='500 13px Outfit,sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.75;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.pinyin,80,stripY+18);ctx.restore();}
-  if(etymInfo&&etymInfo.meaning){ctx.save();ctx.font='300 10px Outfit,"Noto Sans SC",sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.5;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.meaning.slice(0,28),80,stripY+36);ctx.restore();}
-  ctx.save();ctx.font='300 9px Outfit,sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.35;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-16,H-10);ctx.restore();
 }
 
 // ── Draw poster — ink stamp style ────────────────────────────────────────────
@@ -677,8 +509,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var holeSeed = seed + si * 7919;
       // Each stroke gets random depth focus — creates bokeh/depth-of-field feel
       var depthFocus = 0.2 + sr() * 0.8;
-      // Font mode Y: pass char so stroke mask is applied over font pixels
-      renderInkStroke(ctx, strokes[si], sl.cx, sl.cy, sl.size, inkColor(sl.depth), holeSeed, depthFocus, ch);
+      renderInkStroke(ctx, strokes[si], sl.cx, sl.cy, sl.size, inkColor(sl.depth), holeSeed, depthFocus);
     }
   } else {
     // Fallback: font render when no stroke data
@@ -798,28 +629,12 @@ function animatePoster(ch, data, etymInfo) {
     var ofc2=document.createElement('canvas');
     ofc2.width=sl2.size; ofc2.height=sl2.size;
     var ofx2=ofc2.getContext('2d');
-    if (currentFont !== 'stroke') {
-      // Method Y: font pixels masked by stroke path
-      var fstr2 = FONTS[currentFont] || FONTS.serif;
-      ofx2.font = Math.round(sl2.size*0.88)+'px '+fstr2;
-      ofx2.textAlign='center'; ofx2.textBaseline='middle';
-      ofx2.fillStyle='#000';
-      ofx2.fillText(ch, sl2.size/2, sl2.size/2);
-      ofx2.globalCompositeOperation='destination-in';
-      ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
-      ofx2.scale(sl2.size/1024,-sl2.size/1024);
-      ofx2.translate(-512,-512); ofx2.fillStyle='#000';
-      try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
-      ofx2.restore();
-      ofx2.globalCompositeOperation='source-over';
-    } else {
-      ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
-      ofx2.scale(sl2.size/1024,-sl2.size/1024);
-      ofx2.translate(-512,-512);
-      ofx2.fillStyle='#000';
-      try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
-      ofx2.restore();
-    }
+    ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
+    ofx2.scale(sl2.size/1024,-sl2.size/1024);
+    ofx2.translate(-512,-512);
+    ofx2.fillStyle='#000';
+    try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
+    ofx2.restore();
     var imd=ofx2.getImageData(0,0,sl2.size,sl2.size);
     var hs3=seed2+si2*7919; function hr3(){hs3=(hs3*1664525+1013904223)&0x7fffffff;return hs3/0x7fffffff;}
     var dots=[];
@@ -900,37 +715,49 @@ function animatePoster(ch, data, etymInfo) {
     ctx.globalAlpha=1;
   }
 
-  var revealed = [];
-  var revealedT = []; // t=1 for each revealed stroke
+  // All strokes launch simultaneously with random delay + duration
+  var strokeStates = []; // {startTime, delay, dur} per stroke
+  var sr3seed = seed2 + 9999;
+  function sr3(){sr3seed=(sr3seed*1664525+1013904223)&0x7fffffff;return sr3seed/0x7fffffff;}
+  for (var ki=0; ki<total; ki++) {
+    strokeStates.push({
+      startTime: null,
+      delay: sr3() * 800,      // 0–800ms random stagger
+      dur:   900 + sr3() * 600  // 900–1500ms each, different speeds
+    });
+  }
+  var allDone = false;
 
-  function runStroke(idx) {
-    if (idx >= total) { drawPoster(ch, data, etymInfo); return; }
-    var startTime = null;
-    var dur = 1100; // ms per stroke — longer for wind arc to be visible
+  function allGatherFrame(ts) {
+    if (allDone) return;
+    drawBg();
 
-    function gatherFrame(ts) {
-      if (!startTime) startTime = ts;
-      var t = Math.min((ts-startTime)/dur, 1);
-      drawBg();
-      // Draw already-settled strokes at t=1
-      for(var ri=0;ri<revealed.length;ri++){
-        drawStrokeDots(revealed[ri], 1.0);
+    var finishedCount = 0;
+    for (var ai=0; ai<total; ai++) {
+      var st = strokeStates[ai];
+      if (st.startTime === null) st.startTime = ts;
+      var elapsed = ts - st.startTime - st.delay;
+      if (elapsed < 0) {
+        // Not started yet — skip drawing
+        continue;
       }
-      // Current stroke gathering
-      drawStrokeDots(idx, t);
-      drawOverlay();
-      if (t < 1) {
-        animTimer = requestAnimationFrame(gatherFrame);
-      } else {
-        revealed.push(idx);
-        animTimer = setTimeout(function(){ runStroke(idx+1); }, 60);
-      }
+      var t = Math.min(elapsed / st.dur, 1);
+      drawStrokeDots(ai, t);
+      if (t >= 1) finishedCount++;
     }
-    animTimer = requestAnimationFrame(gatherFrame);
+
+    drawOverlay();
+
+    if (finishedCount >= total) {
+      allDone = true;
+      drawPoster(ch, data, etymInfo);
+      return;
+    }
+    animTimer = requestAnimationFrame(allGatherFrame);
   }
 
   drawBg(); drawOverlay();
-  runStroke(0);
+  animTimer = requestAnimationFrame(allGatherFrame);
 }
 
 // ── Wrap text helper ──────────────────────────────────────────────────────────
