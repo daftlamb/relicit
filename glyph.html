@@ -212,7 +212,7 @@ var canvas = document.getElementById('glyph-canvas');
 var ctx = canvas.getContext('2d');
 // Retina / HiDPI support
 var DPR = window.devicePixelRatio || 1;
-var CW = 520, CH = 680;
+var CW = 600, CH = 800;
 canvas.width = CW * DPR;
 canvas.height = CH * DPR;
 canvas.style.width = CW + 'px';
@@ -406,7 +406,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
 function drawPosterFont(ch, etymInfo) {
   if (animTimer) { clearTimeout(animTimer); animTimer = null; }
   var sc = SCHEMES[currentScheme];
-  var W = 520, H = 680;
+  var W = 600, H = 800;
   ctx.clearRect(0, 0, W, H);
 
   var ip = {
@@ -503,7 +503,7 @@ function drawPosterFont(ch, etymInfo) {
 function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   if (animTimer) { clearTimeout(animTimer); animTimer = null; }
   var sc = SCHEMES[currentScheme];
-  var W = 520, H = 680;
+  var W = 600, H = 800;
   ctx.clearRect(0, 0, W, H);
 
   // ── Ink color system ────────────────────────────────────────────────────────
@@ -653,7 +653,7 @@ function animatePoster(ch, data, etymInfo) {
   var sc2 = SCHEMES[currentScheme];
   var seed2 = ch.codePointAt(0);
   function sr2() { seed2 = (seed2 * 1664525 + 1013904223) & 0x7fffffff; return seed2 / 0x7fffffff; }
-  var W = 520, H = 680;
+  var W = 600, H = 800;
   var preLayout = [];
   for (var li2 = 0; li2 < total; li2++) {
     var cx2 = W*0.1 + sr2() * W*0.8;
