@@ -350,7 +350,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
   // 3. Draw ink wash dots directly on main canvas
   //    Each dot: random size (1–8px), random opacity, random offset from sampled pixel
   //    Creates natural ink bleed / sumi-e texture
-  var step = Math.max(2, Math.round(size / 80)); // adaptive sampling density
+  var step = 1; // sample every pixel for max density
   var ox = cx - size/2;
   var oy = cy - size/2;
 
@@ -369,19 +369,19 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
 
       // Random ink dot properties
       var rnd = hr();
-      if (rnd > 0.72) continue; // skip ~28% of pixels for sparseness/texture
+      if (rnd > 0.55) continue; // keep ~55% for density
 
-      // Dot radius: larger in center, smaller at edges, plus randomness
-      var baseR = 1.5 + hr()*3.5;
-      var r = baseR * (0.5 + edgeFactor*0.5);
+      // Dot radius: very small, fine grain
+      var baseR = 0.3 + hr()*0.6;
+      var r = baseR * (0.6 + edgeFactor*0.4);
 
-      // Random positional jitter — ink bleeding
-      var jitter = r * 1.8;
+      // Random positional jitter — subtle ink bleeding
+      var jitter = r * 1.2;
       var jx = (hr()-0.5)*jitter;
       var jy = (hr()-0.5)*jitter;
 
-      // Opacity: denser in center, lighter at edges
-      var alpha = (0.3 + hr()*0.5) * (0.4 + edgeFactor*0.6);
+      // Opacity: denser in center
+      var alpha = (0.4 + hr()*0.5) * (0.5 + edgeFactor*0.5);
 
       // Color variation: slight warmth shift per dot
       var cr = Math.min(255, inkR + Math.round((hr()-0.5)*20));
@@ -392,9 +392,9 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
       ctx.fillStyle = 'rgb('+cr+','+cg+','+cb+')';
       ctx.beginPath();
       // Mix circles and slight ellipses for organic feel
-      if (hr() > 0.7) {
-        // Elongated drop
-        ctx.ellipse(ox+px+jx, oy+py+jy, r*1.5, r*0.6, hr()*Math.PI, 0, Math.PI*2);
+      if (hr() > 0.85) {
+        // Rare elongated drop
+        ctx.ellipse(ox+px+jx, oy+py+jy, r*1.4, r*0.5, hr()*Math.PI, 0, Math.PI*2);
       } else {
         ctx.arc(ox+px+jx, oy+py+jy, r, 0, Math.PI*2);
       }
@@ -665,113 +665,79 @@ function animatePoster(ch, data, etymInfo) {
     return;
   }
   var total = data.strokes.length;
-  var fadeDuration = 500;
-
-  // Pre-sample all stroke dots once so animation uses stable positions
-  var sc2 = SCHEMES[currentScheme];
-  var seed2 = ch.codePointAt(0);
-  function sr2() { seed2 = (seed2 * 1664525 + 1013904223) & 0x7fffffff; return seed2 / 0x7fffffff; }
   var W = 600, H = 800;
+  var sc2 = SCHEMES[currentScheme];
+
+  // Pre-compute layout (same as drawPoster so positions match)
+  var seed2 = ch.codePointAt(0);
+  function sr2() { seed2=(seed2*1664525+1013904223)&0x7fffffff; return seed2/0x7fffffff; }
+  var N = total;
+  var cols = Math.ceil(Math.sqrt(N * W / H));
+  var rows = Math.ceil(N / cols);
+  var slotW = W/cols, slotH = H/rows;
   var preLayout = [];
-  for (var li2 = 0; li2 < total; li2++) {
-    var cx2 = W*0.1 + sr2() * W*0.8;
-    var cy2 = H*0.05 + sr2() * H*0.9;
-    var sz2 = Math.round(150 + sr2() * 280);
-    var dep2 = sr2();
-    preLayout.push({ cx: cx2, cy: cy2, size: sz2, depth: dep2 });
-  }
-  var prePts = [];
-  for (var pi = 0; pi < total; pi++) {
-    try { prePts.push(sampleStroke(data.strokes[pi], preLayout[pi].size)); }
-    catch(e) { prePts.push([]); }
+  for (var li2=0; li2<N; li2++) {
+    var col2=li2%cols, row2=Math.floor(li2/cols);
+    var slotCX2=slotW*(col2+0.5)+(sr2()-0.5)*slotW*0.5;
+    var slotCY2=slotH*(row2+0.5)+(sr2()-0.5)*slotH*0.5;
+    var minSz=Math.min(slotW,slotH)*2.5, maxSz=Math.min(slotW,slotH)*4.5;
+    var sz2=Math.round(minSz+sr2()*(maxSz-minSz));
+    var dep2=0.3+sr2()*0.7;
+    preLayout.push({cx:slotCX2,cy:slotCY2,size:sz2,depth:dep2});
   }
 
-  var inkPalettes2 = {
-    parchment: { dark:[26,18,8],    light:[80,50,20]  },
-    ink:       { dark:[10,8,4],     light:[40,30,10]  },
-    night:     { dark:[192,216,255], light:[96,144,208] },
-    minimal:   { dark:[17,17,17],   light:[136,136,136] }
-  };
-  var ip2 = inkPalettes2[currentScheme] || inkPalettes2.parchment;
-  function inkColor2(t) {
-    var r = Math.round(ip2.light[0] + (ip2.dark[0] - ip2.light[0]) * t);
-    var g = Math.round(ip2.light[1] + (ip2.dark[1] - ip2.light[1]) * t);
-    var b = Math.round(ip2.light[2] + (ip2.dark[2] - ip2.light[2]) * t);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  var ip2={parchment:{dark:[26,18,8],light:[80,50,20]},ink:{dark:[10,8,4],light:[40,30,10]},night:{dark:[192,216,255],light:[96,144,208]},minimal:{dark:[17,17,17],light:[136,136,136]}}[currentScheme]||{dark:[26,18,8],light:[80,50,20]};
+  function inkColor2(t){return 'rgb('+Math.round(ip2.light[0]+(ip2.dark[0]-ip2.light[0])*t)+','+Math.round(ip2.light[1]+(ip2.dark[1]-ip2.light[1])*t)+','+Math.round(ip2.light[2]+(ip2.dark[2]-ip2.light[2])*t)+')';}
+
+  function drawBg() {
+    ctx.fillStyle=sc2.bg; ctx.fillRect(0,0,W,H);
+    var gs=99991; function gr2(){gs=(gs*1664525+1013904223)&0x7fffffff;return gs/0x7fffffff;}
+    for(var gi=0;gi<1200;gi++){ctx.fillStyle='rgba(80,50,20,'+(0.015+gr2()*0.035)+')';ctx.fillRect(gr2()*W,gr2()*H,1,1);}
   }
 
-  function drawDotsFor(idx, alphaScale) {
-    var sl = preLayout[idx];
-    var pts = prePts[idx];
-    if (!pts || pts.length === 0) return;
-    var dotColor = inkColor2(sl.depth);
-    var ox = sl.cx - sl.size / 2;
-    var oy = sl.cy - sl.size / 2;
-    ctx.fillStyle = dotColor;
-    for (var di = 0; di < pts.length; di++) {
-      var r = 1.2 + Math.random() * 1.4;
-      var a = (0.35 + Math.random() * 0.55) * alphaScale;
-      ctx.globalAlpha = a;
-      ctx.beginPath();
-      ctx.arc(ox + pts[di][0], oy + pts[di][1], r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
+  function drawOverlay() {
+    ctx.save(); ctx.font='40px "Noto Serif SC",serif'; ctx.fillStyle=inkColor2(1.0);
+    ctx.globalAlpha=0.12; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText(ch,28,H-44); ctx.restore();
+    if(etymInfo&&etymInfo.pinyin){ctx.save();ctx.font='10px Outfit,sans-serif';ctx.fillStyle=inkColor2(0.8);ctx.globalAlpha=0.35;ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText(etymInfo.pinyin,28,H-36);ctx.restore();}
+    ctx.save();ctx.font='8px Outfit,sans-serif';ctx.fillStyle=inkColor2(0.5);ctx.globalAlpha=0.18;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-20,H-16);ctx.restore();
   }
 
-  function drawBackground() {
-    ctx.fillStyle = sc2.bg;
-    ctx.fillRect(0, 0, W, H);
-    var grainSeed = 99991;
-    function gr2() { grainSeed = (grainSeed * 1664525 + 1013904223) & 0x7fffffff; return grainSeed / 0x7fffffff; }
-    ctx.save();
-    for (var gi = 0; gi < 1200; gi++) {
-      var gx = gr2() * W;
-      var gy = gr2() * H;
-      var ga = 0.015 + gr2() * 0.035;
-      ctx.fillStyle = 'rgba(80,50,20,' + ga + ')';
-      ctx.fillRect(gx, gy, 1, 1);
-    }
-    ctx.restore();
-    ctx.save();
-    ctx.strokeStyle = 'rgba(120,80,40,0.035)';
-    ctx.lineWidth = 0.5;
-    for (var hl = 0; hl < H; hl += 22) {
-      ctx.beginPath(); ctx.moveTo(0, hl); ctx.lineTo(W, hl); ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  var revealedDots = []; // store revealed dot sets for redraw
+  var revealed = [];
 
   function runStroke(idx) {
-    if (idx >= total) {
-      drawPoster(ch, data, etymInfo);
-      return;
-    }
+    if (idx >= total) { drawPoster(ch, data, etymInfo); return; }
+    var sl = preLayout[idx];
+    var inkCol = inkColor2(sl.depth);
+    var holeSeed = seed2 + idx*7919;
     var startTime = null;
+    var fadeDur = 600;
+
     function fadeFrame(ts) {
       if (!startTime) startTime = ts;
-      var elapsed = ts - startTime;
-      var alpha = Math.min(elapsed / fadeDuration, 1);
-      // Redraw background + all already-revealed strokes
-      drawBackground();
-      for (var ri = 0; ri < revealedDots.length; ri++) {
-        drawDotsFor(revealedDots[ri], 1.0);
+      var alpha = Math.min((ts-startTime)/fadeDur, 1);
+      // Redraw bg + revealed strokes
+      drawBg();
+      for (var ri=0; ri<revealed.length; ri++) {
+        var rs=revealed[ri];
+        renderInkStroke(ctx, data.strokes[rs], preLayout[rs].cx, preLayout[rs].cy, preLayout[rs].size, inkColor2(preLayout[rs].depth), seed2+rs*7919);
       }
-      // Fade in current stroke
-      drawDotsFor(idx, alpha);
+      // Fade in current stroke via globalAlpha
+      ctx.save(); ctx.globalAlpha=alpha;
+      renderInkStroke(ctx, data.strokes[idx], sl.cx, sl.cy, sl.size, inkCol, holeSeed);
+      ctx.restore();
+      drawOverlay();
       if (alpha < 1) {
         animTimer = requestAnimationFrame(fadeFrame);
       } else {
-        revealedDots.push(idx);
-        animTimer = setTimeout(function() { runStroke(idx + 1); }, 80);
+        revealed.push(idx);
+        animTimer = setTimeout(function(){ runStroke(idx+1); }, 120);
       }
     }
     animTimer = requestAnimationFrame(fadeFrame);
   }
 
-  drawBackground();
+  drawBg(); drawOverlay();
   runStroke(0);
 }
 
