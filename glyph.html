@@ -572,7 +572,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
 
     ctx.save();
-    var nLines = 7 + Math.floor(fg()*6);
+    var nLines = 2 + Math.floor(fg()*2); // 2–3 lines
     for (var li=0; li<nLines; li++) {
       // Each line: a bezier path sampled into particles
       var baseY = 30 + fg()*(H-86);
@@ -583,12 +583,11 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       // Key: control points inherit velocity from previous segment — no sharp corners
       var pts = [{x:-20, y:baseY}];
       var cy_cur = baseY;
-      var vy = (fg()-0.5)*30; // initial vertical velocity
+      var vy = (fg()-0.5)*80; // wilder initial velocity
       for (var si3=0; si3<nSeg; si3++) {
         var x0 = -20 + si3*segW;
-        // Velocity drifts gently — no abrupt direction change
-        vy += (fg()-0.5)*20;
-        vy *= 0.7; // dampen: tends back toward horizontal
+        vy += (fg()-0.5)*60; // more random drift per segment
+        vy *= 0.65; // dampen but keep some momentum
         var endY = cy_cur + vy;
         // Control points follow the flow direction — smooth tangent continuity
         pts.push({
