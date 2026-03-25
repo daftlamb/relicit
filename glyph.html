@@ -338,20 +338,45 @@ function fetchGlyph(ch, callback) {
 
 // ── Ink wash renderer: splatter dots inside stroke path — sumi-e style ────────
 // depthFocus: 0.0=far(sparse,small dots) 1.0=near(dense,larger dots)
-function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthFocus) {
+function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthFocus, fontChar) {
   if (depthFocus === undefined) depthFocus = 0.7;
   // depthFocus controls: dot density keep%, dot size, jitter amount
-  // 1. Sample pixels inside stroke on offscreen canvas
+  // fontChar: if set, use font glyph pixels masked by strokePath (method Y)
+
+  // 1. Build pixel mask on offscreen canvas
   var ofc = document.createElement('canvas');
   ofc.width = size; ofc.height = size;
   var ofx = ofc.getContext('2d');
-  ofx.save();
-  ofx.translate(size/2, size/2);
-  ofx.scale(size/1024, -size/1024);
-  ofx.translate(-512, -512);
-  ofx.fillStyle = '#000';
-  try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
-  ofx.restore();
+
+  if (fontChar && currentFont !== 'stroke') {
+    // Method Y: render font char full-size, then mask with hanzi-writer stroke path
+    var fontStr = FONTS[currentFont] || FONTS.serif;
+    ofx.font = Math.round(size * 0.88) + 'px ' + fontStr;
+    ofx.textAlign = 'center';
+    ofx.textBaseline = 'middle';
+    ofx.fillStyle = '#000';
+    ofx.fillText(fontChar, size/2, size/2);
+    // Mask: keep only pixels inside this stroke's path
+    ofx.globalCompositeOperation = 'destination-in';
+    ofx.save();
+    ofx.translate(size/2, size/2);
+    ofx.scale(size/1024, -size/1024);
+    ofx.translate(-512, -512);
+    ofx.fillStyle = '#000';
+    try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
+    ofx.restore();
+    ofx.globalCompositeOperation = 'source-over';
+  } else {
+    // Default: use hanzi-writer stroke path directly
+    ofx.save();
+    ofx.translate(size/2, size/2);
+    ofx.scale(size/1024, -size/1024);
+    ofx.translate(-512, -512);
+    ofx.fillStyle = '#000';
+    try { ofx.fill(new Path2D(strokePath)); } catch(e) {}
+    ofx.restore();
+  }
+
   var imgData = ofx.getImageData(0, 0, size, size);
 
   // 2. PRNG
@@ -652,7 +677,8 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var holeSeed = seed + si * 7919;
       // Each stroke gets random depth focus — creates bokeh/depth-of-field feel
       var depthFocus = 0.2 + sr() * 0.8;
-      renderInkStroke(ctx, strokes[si], sl.cx, sl.cy, sl.size, inkColor(sl.depth), holeSeed, depthFocus);
+      // Font mode Y: pass char so stroke mask is applied over font pixels
+      renderInkStroke(ctx, strokes[si], sl.cx, sl.cy, sl.size, inkColor(sl.depth), holeSeed, depthFocus, ch);
     }
   } else {
     // Fallback: font render when no stroke data
@@ -772,12 +798,28 @@ function animatePoster(ch, data, etymInfo) {
     var ofc2=document.createElement('canvas');
     ofc2.width=sl2.size; ofc2.height=sl2.size;
     var ofx2=ofc2.getContext('2d');
-    ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
-    ofx2.scale(sl2.size/1024,-sl2.size/1024);
-    ofx2.translate(-512,-512);
-    ofx2.fillStyle='#000';
-    try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
-    ofx2.restore();
+    if (currentFont !== 'stroke') {
+      // Method Y: font pixels masked by stroke path
+      var fstr2 = FONTS[currentFont] || FONTS.serif;
+      ofx2.font = Math.round(sl2.size*0.88)+'px '+fstr2;
+      ofx2.textAlign='center'; ofx2.textBaseline='middle';
+      ofx2.fillStyle='#000';
+      ofx2.fillText(ch, sl2.size/2, sl2.size/2);
+      ofx2.globalCompositeOperation='destination-in';
+      ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
+      ofx2.scale(sl2.size/1024,-sl2.size/1024);
+      ofx2.translate(-512,-512); ofx2.fillStyle='#000';
+      try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
+      ofx2.restore();
+      ofx2.globalCompositeOperation='source-over';
+    } else {
+      ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
+      ofx2.scale(sl2.size/1024,-sl2.size/1024);
+      ofx2.translate(-512,-512);
+      ofx2.fillStyle='#000';
+      try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
+      ofx2.restore();
+    }
     var imd=ofx2.getImageData(0,0,sl2.size,sl2.size);
     var hs3=seed2+si2*7919; function hr3(){hs3=(hs3*1664525+1013904223)&0x7fffffff;return hs3/0x7fffffff;}
     var dots=[];
