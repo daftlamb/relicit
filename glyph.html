@@ -192,6 +192,14 @@ var animTimer = null;
 // DOM refs
 var canvas = document.getElementById('glyph-canvas');
 var ctx = canvas.getContext('2d');
+// Retina / HiDPI support
+var DPR = window.devicePixelRatio || 1;
+var CW = 520, CH = 680;
+canvas.width = CW * DPR;
+canvas.height = CH * DPR;
+canvas.style.width = CW + 'px';
+canvas.style.height = CH + 'px';
+ctx.scale(DPR, DPR);
 var charInput = document.getElementById('char-input');
 var status = document.getElementById('status');
 
@@ -383,9 +391,9 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var jy = (sr() - 0.5) * slotH * 0.5;
       var lcx = slotCX + jx;
       var lcy = slotCY + jy;
-      // Stroke size: large, relative to slot size, some bleed off edge
-      var minSz = Math.min(slotW, slotH) * 1.1;
-      var maxSz = Math.min(slotW, slotH) * 2.2;
+      // Stroke size: very large relative to slot, aggressively bleed off edges
+      var minSz = Math.min(slotW, slotH) * 2.5;
+      var maxSz = Math.min(slotW, slotH) * 4.5;
       var lsz = minSz + sr() * (maxSz - minSz);
       var ldepth = 0.3 + sr() * 0.7;
       layout.push({ cx: lcx, cy: lcy, size: Math.round(lsz), depth: ldepth });
@@ -403,7 +411,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var oy = sl.cy - sl.size / 2;
       ctx.fillStyle = dotColor;
       for (var di = 0; di < pts.length; di++) {
-        var r = 0.3 + Math.random() * 0.5;
+        var r = 0.5 + Math.random() * 0.8;
         var a = (0.5 + Math.random() * 0.45) * alphaScale;
         ctx.globalAlpha = a;
         ctx.beginPath();
