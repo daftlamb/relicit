@@ -74,6 +74,10 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
         <button class="btn" data-scheme="ink">Ink</button>
         <button class="btn" data-scheme="night">Night</button>
         <button class="btn" data-scheme="minimal">Minimal</button>
+        <button class="btn" data-scheme="crimson">Crimson</button>
+        <button class="btn" data-scheme="forest">Forest</button>
+        <button class="btn" data-scheme="dusk">Dusk</button>
+        <button class="btn" data-scheme="paper">Paper</button>
       </div>
     </div>
     <div class="panel-section">
@@ -119,7 +123,11 @@ var SCHEMES = {
   parchment: { bg:'#f5efe0', ink:'#2a1a0e', accent:'#8b4513', muted:'#b89870', ruled:'rgba(139,69,19,0.06)', watermark:'rgba(139,69,19,0.04)', badge:'#8b4513', badgeText:'#f5efe0', palette:['#2a1a0e','#8b4513','#4a6741','#1a3a5c','#5c3a6b','#6b4a1a','#2a4a4a','#5c4a2a'] },
   ink:       { bg:'#f5c800', ink:'#1a1208', accent:'#1a1208', muted:'#7a6010', ruled:'rgba(0,0,0,0.06)', watermark:'rgba(0,0,0,0.04)', badge:'#1a1208', badgeText:'#f5c800', palette:['#1a1208','#2a2010','#0a0a08','#1a1008','#221808','#181208','#100e06','#201808'] },
   night:     { bg:'#0d0d1a', ink:'#a0e0ff', accent:'#00ffcc', muted:'#406080', ruled:'rgba(0,255,204,0.04)', watermark:'rgba(0,255,204,0.03)', badge:'#00ffcc', badgeText:'#0d0d1a', palette:['#a0e0ff','#00ffcc','#ff80c0','#80ffaa','#c0a0ff','#ffcc40','#40e0d0','#ff8040'] },
-  minimal:   { bg:'#ffffff', ink:'#111111', accent:'#333333', muted:'#aaaaaa', ruled:'rgba(0,0,0,0.04)', watermark:'rgba(0,0,0,0.03)', badge:'#333333', badgeText:'#ffffff', palette:['#111111','#333333','#555555','#222222','#444444','#666666','#1a1a1a','#2a2a2a'] }
+  minimal:   { bg:'#ffffff', ink:'#111111', accent:'#333333', muted:'#aaaaaa', ruled:'rgba(0,0,0,0.04)', watermark:'rgba(0,0,0,0.03)', badge:'#333333', badgeText:'#ffffff', palette:['#111111','#333333','#555555','#222222','#444444','#666666','#1a1a1a','#2a2a2a'] },
+  crimson:   { bg:'#1a0408', ink:'#ff4455', accent:'#ff6677', muted:'#6a2030', ruled:'rgba(255,68,85,0.05)', watermark:'rgba(255,68,85,0.03)', badge:'#ff4455', badgeText:'#1a0408', palette:['#ff4455','#ff6677','#cc2233','#ff8899','#dd3344','#ff2244','#cc1122','#ff99aa'] },
+  forest:    { bg:'#0e1a10', ink:'#7ddc8a', accent:'#4db85a', muted:'#2a4a30', ruled:'rgba(77,184,90,0.05)', watermark:'rgba(77,184,90,0.03)', badge:'#4db85a', badgeText:'#0e1a10', palette:['#7ddc8a','#4db85a','#a0e8aa','#2a8a3a','#60c870','#99dda0','#3aaa4a','#c0f0c8'] },
+  dusk:      { bg:'#1a0e22', ink:'#e0aaff', accent:'#b06aee', muted:'#5a3a7a', ruled:'rgba(176,106,238,0.05)', watermark:'rgba(176,106,238,0.03)', badge:'#b06aee', badgeText:'#1a0e22', palette:['#e0aaff','#b06aee','#cc88ff','#9955cc','#dd99ff','#8844bb','#ffbbff','#aa66dd'] },
+  paper:     { bg:'#e8e0d0', ink:'#1a2a4a', accent:'#2a4a8a', muted:'#7a8aaa', ruled:'rgba(26,42,74,0.05)', watermark:'rgba(26,42,74,0.03)', badge:'#2a4a8a', badgeText:'#e8e0d0', palette:['#1a2a4a','#2a4a8a','#3a5a9a','#1a3a6a','#4a6aaa','#0a1a3a','#2a3a6a','#5a7aba'] }
 };
 
 var ETYM = {
@@ -436,7 +444,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
   ctx.globalAlpha = 1;
 }
 
-// ── Font-based poster: render char with browser font, split into N tiles ─────
+// ── Font-based poster: render whole char with browser font → ink wash scatter ─
 function drawPosterFont(ch, etymInfo) {
   if (animTimer) { clearTimeout(animTimer); animTimer = null; }
   var sc = SCHEMES[currentScheme];
@@ -447,7 +455,11 @@ function drawPosterFont(ch, etymInfo) {
     parchment: { dark:[26,18,8],    light:[80,50,20]  },
     ink:       { dark:[10,8,4],     light:[40,30,10]  },
     night:     { dark:[192,216,255],light:[96,144,208] },
-    minimal:   { dark:[17,17,17],   light:[100,100,100]}
+    minimal:   { dark:[17,17,17],   light:[100,100,100]},
+    crimson:   { dark:[255,68,85],  light:[180,20,40]  },
+    forest:    { dark:[125,220,138],light:[40,120,55]  },
+    dusk:      { dark:[224,170,255],light:[140,80,200] },
+    paper:     { dark:[26,42,74],   light:[80,110,160] }
   }[currentScheme] || { dark:[26,18,8], light:[80,50,20] };
 
   function inkColor(t) {
@@ -456,81 +468,89 @@ function drawPosterFont(ch, etymInfo) {
                   Math.round(ip.light[2]+(ip.dark[2]-ip.light[2])*t)+')';
   }
 
-  // Background
+  // Background + grain
   ctx.fillStyle = sc.bg; ctx.fillRect(0,0,W,H);
   var gs = 99991; function gr(){gs=(gs*1664525+1013904223)&0x7fffffff;return gs/0x7fffffff;}
-  for (var gi=0;gi<800;gi++){
+  for (var gi=0;gi<1200;gi++){
     ctx.fillStyle='rgba(80,50,20,'+(0.01+gr()*0.03)+')';
     ctx.fillRect(gr()*W,gr()*H,1,1);
   }
 
-  // Render char to large offscreen canvas
   var fontStr = FONTS[currentFont] || FONTS.serif;
-  var N = 6; // split into N "pseudo-strokes" by tiling the char
   var seed = ch.codePointAt(0);
   function sr(){seed=(seed*1664525+1013904223)&0x7fffffff;return seed/0x7fffffff;}
 
-  // Grid layout (same as stroke mode)
-  var cols = Math.ceil(Math.sqrt(N * W / H));
-  var rows = Math.ceil(N / cols);
-  var slotW = W / cols, slotH = H / rows;
+  // Render the character 3–5 times at different sizes/positions/depths
+  var N = 4;
+  var inkR=ip.dark[0], inkG=ip.dark[1], inkB=ip.dark[2];
 
   for (var i=0; i<N; i++) {
-    var col = i % cols, row = Math.floor(i/cols);
-    var slotCX = slotW*(col+0.5) + (sr()-0.5)*slotW*0.5;
-    var slotCY = slotH*(row+0.5) + (sr()-0.5)*slotH*0.5;
-    var sz = Math.round(Math.min(slotW,slotH)*(2.5+sr()*2.0));
-    var depth = 0.3+sr()*0.7;
+    // Large character, centered with random offset
+    var sz = Math.round(W * (0.7 + sr()*0.6));
+    var cx = W*0.5 + (sr()-0.5)*W*0.25;
+    var cy = (H-56)*0.5 + (sr()-0.5)*(H-56)*0.2;
+    var depthFocus = 0.2 + sr()*0.8;
 
-    // Render char at sz to offscreen, with random crop offset
+    // Render char to offscreen
     var ofc = document.createElement('canvas');
     ofc.width = sz; ofc.height = sz;
     var ofx = ofc.getContext('2d');
-    var fontSize = sz * 0.9;
-    ofx.font = fontSize+'px '+fontStr;
+    ofx.font = Math.round(sz*0.85)+'px '+fontStr;
     ofx.textAlign = 'center';
     ofx.textBaseline = 'middle';
-    // Random position offset — each tile shows a different "part" of the char
-    var offX = (sr()-0.5)*sz*0.3;
-    var offY = (sr()-0.5)*sz*0.3;
     ofx.fillStyle = '#000';
-    ofx.fillText(ch, sz/2+offX, sz/2+offY);
+    ofx.fillText(ch, sz/2, sz/2);
 
-    // Punch holes (same as renderInkStroke)
-    var hs = seed+i*7919; function hr2(){hs=(hs*1664525+1013904223)&0x7fffffff;return hs/0x7fffffff;}
-    ofx.globalCompositeOperation='destination-out';
-    for (var v=0;v<4+Math.floor(hr2()*4);v++){
-      ofx.globalAlpha=0.4+hr2()*0.4;
-      ofx.beginPath();ofx.arc(hr2()*sz,hr2()*sz,sz*(0.04+hr2()*0.08),0,Math.PI*2);ofx.fill();
-    }
-    for (var v2=0;v2<15+Math.floor(hr2()*20);v2++){
-      ofx.globalAlpha=0.3+hr2()*0.5;
-      ofx.beginPath();ofx.arc(hr2()*sz,hr2()*sz,sz*(0.006+hr2()*0.02),0,Math.PI*2);ofx.fill();
-    }
-    ofx.globalCompositeOperation='source-over'; ofx.globalAlpha=1;
+    var imgData = ofx.getImageData(0, 0, sz, sz);
+    var hs = seed + i*7919;
+    function hr(){ hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
 
-    ctx.save();
-    ctx.globalAlpha=0.8+hr2()*0.2;
-    ctx.drawImage(ofc, slotCX-sz/2, slotCY-sz/2);
-    // Color tint
-    ctx.globalAlpha=0.15; ctx.fillStyle=inkColor(depth);
-    ctx.fillRect(slotCX-sz/2, slotCY-sz/2, sz, sz);
-    ctx.restore();
+    var ox = cx - sz/2, oy = cy - sz/2;
+    var keepRate = 0.2 + depthFocus*0.55;
+    var blurAmt = (1-depthFocus)*sz*0.18;
+
+    for (var py=0; py<sz; py+=1) {
+      for (var px2=0; px2<sz; px2+=1) {
+        var pidx = (py*sz+px2)*4;
+        if (imgData.data[pidx+3] < 60) continue;
+        if (hr() > keepRate) continue;
+
+        var edgeF = imgData.data[pidx+3]/255;
+        var baseR2 = (0.2+depthFocus*0.5)+hr()*(0.3+depthFocus*0.4);
+        var r2 = baseR2*(0.6+edgeF*0.4);
+
+        var edgeSc = (1-edgeF);
+        var scR = blurAmt*(edgeSc*0.7+0.3);
+        var dxC=px2-sz/2, dyC=py-sz/2;
+        var distC=Math.sqrt(dxC*dxC+dyC*dyC)||1;
+        var scX=(dxC/distC)*scR*(0.4+hr()*0.6);
+        var scY=(dyC/distC)*scR*(0.4+hr()*0.6);
+        var jit=r2*(0.8+(1-depthFocus)*1.5);
+        var jx=scX+(hr()-0.5)*jit, jy=scY+(hr()-0.5)*jit;
+
+        var al=(0.3+depthFocus*0.4+hr()*0.3)*(0.5+edgeF*0.5);
+        var cr2=Math.min(255,inkR+Math.round((hr()-0.5)*20));
+        var cg2=Math.min(255,inkG+Math.round((hr()-0.5)*12));
+        var cb2=Math.min(255,inkB+Math.round((hr()-0.5)*8));
+
+        ctx.globalAlpha=al;
+        ctx.fillStyle='rgb('+cr2+','+cg2+','+cb2+')';
+        ctx.beginPath();
+        if (hr()>0.85){ctx.ellipse(ox+px2+jx,oy+py+jy,r2*1.4,r2*0.5,hr()*Math.PI,0,Math.PI*2);}
+        else{ctx.arc(ox+px2+jx,oy+py+jy,r2,0,Math.PI*2);}
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha=1;
   }
 
-  // Minimal overlay
-  ctx.save();
-  ctx.font='40px "Noto Serif SC",serif'; ctx.fillStyle=inkColor(1.0);
-  ctx.globalAlpha=0.12; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-  ctx.fillText(ch,28,H-44); ctx.restore();
-  if (etymInfo&&etymInfo.pinyin){
-    ctx.save(); ctx.font='10px Outfit,sans-serif'; ctx.fillStyle=inkColor(0.8);
-    ctx.globalAlpha=0.35; ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillText(etymInfo.pinyin,28,H-36); ctx.restore();
-  }
-  ctx.save(); ctx.font='8px Outfit,sans-serif'; ctx.fillStyle=inkColor(0.5);
-  ctx.globalAlpha=0.18; ctx.textAlign='right'; ctx.textBaseline='bottom';
-  ctx.fillText('Glyph It',W-20,H-16); ctx.restore();
+  // Bottom strip
+  var stripH=56, stripY=H-stripH;
+  ctx.save(); ctx.fillStyle=inkColor(0.95); ctx.globalAlpha=0.88; ctx.fillRect(0,stripY,W,stripH); ctx.restore();
+  ctx.save(); ctx.font='bold 38px "Noto Serif SC",serif'; ctx.fillStyle=sc.bg; ctx.globalAlpha=0.9; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(ch,20,stripY+stripH/2); ctx.restore();
+  if(etymInfo&&etymInfo.pinyin){ctx.save();ctx.font='500 13px Outfit,sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.75;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.pinyin,80,stripY+18);ctx.restore();}
+  if(etymInfo&&etymInfo.meaning){ctx.save();ctx.font='300 10px Outfit,"Noto Sans SC",sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.5;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.meaning.slice(0,28),80,stripY+36);ctx.restore();}
+  ctx.save();ctx.font='300 9px Outfit,sans-serif';ctx.fillStyle=sc.bg;ctx.globalAlpha=0.35;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-16,H-10);ctx.restore();
 }
 
 // ── Draw poster — ink stamp style ────────────────────────────────────────────
@@ -545,7 +565,11 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     parchment: { dark:[26,18,8],    light:[80,50,20]  },
     ink:       { dark:[10,8,4],     light:[40,30,10]  },
     night:     { dark:[192,216,255], light:[96,144,208] },
-    minimal:   { dark:[17,17,17],   light:[136,136,136] }
+    minimal:   { dark:[17,17,17],   light:[136,136,136] },
+    crimson:   { dark:[255,68,85],  light:[180,20,40]  },
+    forest:    { dark:[125,220,138],light:[40,120,55]  },
+    dusk:      { dark:[224,170,255],light:[140,80,200] },
+    paper:     { dark:[26,42,74],   light:[80,110,160] }
   };
   var ip = inkPalettes[currentScheme] || inkPalettes.parchment;
 
@@ -722,7 +746,7 @@ function animatePoster(ch, data, etymInfo) {
     preLayout.push({cx:slotCX2,cy:slotCY2,size:sz2,depth:dep2,focus:focus2});
   }
 
-  var ip2={parchment:{dark:[26,18,8],light:[80,50,20]},ink:{dark:[10,8,4],light:[40,30,10]},night:{dark:[192,216,255],light:[96,144,208]},minimal:{dark:[17,17,17],light:[136,136,136]}}[currentScheme]||{dark:[26,18,8],light:[80,50,20]};
+  var ip2={parchment:{dark:[26,18,8],light:[80,50,20]},ink:{dark:[10,8,4],light:[40,30,10]},night:{dark:[192,216,255],light:[96,144,208]},minimal:{dark:[17,17,17],light:[136,136,136]},crimson:{dark:[255,68,85],light:[180,20,40]},forest:{dark:[125,220,138],light:[40,120,55]},dusk:{dark:[224,170,255],light:[140,80,200]},paper:{dark:[26,42,74],light:[80,110,160]}}[currentScheme]||{dark:[26,18,8],light:[80,50,20]};
   function inkColor2(t){return 'rgb('+Math.round(ip2.light[0]+(ip2.dark[0]-ip2.light[0])*t)+','+Math.round(ip2.light[1]+(ip2.dark[1]-ip2.light[1])*t)+','+Math.round(ip2.light[2]+(ip2.dark[2]-ip2.light[2])*t)+')';}
 
   function drawBg() {
