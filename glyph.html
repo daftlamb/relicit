@@ -497,7 +497,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
 
     ctx.save();
-    var nLines = 5 + Math.floor(fg()*5);
+    var nLines = 7 + Math.floor(fg()*6);
     for (var li=0; li<nLines; li++) {
       // Each line: a bezier path sampled into particles
       var baseY = 30 + fg()*(H-86);
@@ -518,9 +518,9 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       }
 
       // Sample points along bezier path and draw tiny particles
-      var totalPts = 280 + Math.floor(fg()*120); // denser
-      var lineAlpha = 0.10 + fg()*0.12;           // more visible
-      var dotR = 0.3 + fg()*0.5;                  // finer dots
+      var totalPts = 400 + Math.floor(fg()*150); // very dense
+      var lineAlpha = 0.15 + fg()*0.15;           // clearly visible
+      var dotR = 0.3 + fg()*0.6;
 
       for (var pi2=0; pi2<totalPts; pi2++) {
         var tGlobal = pi2 / totalPts;
@@ -534,10 +534,12 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
         var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
 
         var edgeFade = Math.sin(tGlobal * Math.PI);
-        // Tighter perpendicular scatter — more thread-like, less diffuse
-        var scatter = (fg()-0.5) * (1.5 + fg()*2.5);
-        var pAlpha = lineAlpha * edgeFade * (0.4 + fg()*0.6);
-        var pr = dotR * (0.5 + fg()*0.8);
+        // Wider scatter with gaussian-like falloff — dense core, soft diffuse edge
+        var sc1 = (fg()-0.5)*3;   // tight core
+        var sc2 = (fg()-0.5)*10;  // occasional outlier
+        var scatter = sc1 + (fg()>0.75 ? sc2 : 0);
+        var pAlpha = lineAlpha * edgeFade * (0.45 + fg()*0.55);
+        var pr = dotR * (0.4 + fg()*1.0);
 
         ctx.globalAlpha = pAlpha;
         ctx.fillStyle = 'rgb('+fogR+','+fogG+','+fogB+')';
