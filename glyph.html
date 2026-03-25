@@ -500,8 +500,8 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var isHero = (li === heroIdx);
       // Hero: 65–85% of canvas short side; others: 30–55%
       var lsz = isHero
-        ? Math.round(Math.min(W, H-56) * (0.65 + sr()*0.20))
-        : Math.round(Math.min(W, H-56) * (0.30 + sr()*0.25));
+        ? Math.round(Math.min(W, H-56) * (3.2 + sr()*1.3))
+        : Math.round(Math.min(W, H-56) * (0.55 + sr()*0.55));
       layout.push({
         cx: margin + sr()*areaW,
         cy: margin + sr()*areaH,
@@ -625,8 +625,8 @@ function animatePoster(ch, data, etymInfo) {
   for (var li2=0; li2<N; li2++) {
     var isHero2=(li2===heroIdx2);
     var lsz2=isHero2
-      ? Math.round(Math.min(W,H-56)*(0.65+sr2()*0.20))
-      : Math.round(Math.min(W,H-56)*(0.30+sr2()*0.25));
+      ? Math.round(Math.min(W,H-56)*(3.2+sr2()*1.3))
+      : Math.round(Math.min(W,H-56)*(0.55+sr2()*0.55));
     preLayout.push({cx:margin2+sr2()*areaW2, cy:margin2+sr2()*areaH2, size:lsz2, depth:0.3+sr2()*0.7});
   }
   var minDist2=Math.min(W,H-56)*0.22;
@@ -841,7 +841,7 @@ document.getElementById('btn-export-panel').addEventListener('click', exportPNG)
 
 // ── Initial render ────────────────────────────────────────────────────────────
 (function() {
-  var initChar = '木';
+  var initChar = '字';
   charInput.value = initChar;
   setStatus('Loading...');
   fetchGlyph(initChar, function(data) {
