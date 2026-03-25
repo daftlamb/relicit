@@ -44,7 +44,7 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 #panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
 #status{font-size:11px;color:var(--muted);min-height:14px;margin-top:6px}
 #canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
-#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15);max-width:100%;max-height:100%;width:auto;height:auto}
+#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15);max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
 @media(max-width:700px){
   /* App fills full viewport; panel is fixed so canvas-area gets exact remaining space */
   html,body{height:100%;overflow:hidden}
@@ -327,8 +327,16 @@ var DPR = window.devicePixelRatio || 1;
 var CW = 720, CH = 1020;
 canvas.width = CW * DPR;
 canvas.height = CH * DPR;
-canvas.style.width = CW + 'px';
-canvas.style.height = CH + 'px';
+// On mobile: let CSS max-width/max-height scale the canvas to fit
+// On desktop: set explicit size
+if (window.innerWidth > 700) {
+  canvas.style.width = CW + 'px';
+  canvas.style.height = CH + 'px';
+} else {
+  // CSS handles scaling via max-width:100% max-height:100%
+  canvas.style.width = '';
+  canvas.style.height = '';
+}
 ctx.scale(DPR, DPR);
 var charInput = document.getElementById('char-input');
 var status = document.getElementById('status');
