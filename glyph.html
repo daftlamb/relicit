@@ -380,10 +380,21 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
       var baseR = (0.2 + depthFocus*0.5) + hr()*(0.3 + depthFocus*0.4);
       var r = baseR * (0.6 + edgeFactor*0.4);
 
-      // Jitter: near=less jitter (sharp), far=more jitter (blurry)
-      var jitter = r * (0.8 + (1-depthFocus)*2.5);
-      var jx = (hr()-0.5)*jitter;
-      var jy = (hr()-0.5)*jitter;
+      // Blur scatter: far strokes scatter outward from stroke center
+      // edgeFactor≈0 means we're near the stroke edge → scatter most
+      var blurAmount = (1 - depthFocus) * size * 0.18; // max ~18% of size for far strokes
+      var edgeScatter = (1 - edgeFactor);              // 0=center, 1=edge
+      var scatterR = blurAmount * (edgeScatter * 0.7 + 0.3); // edge scatters more
+      // Direction: away from stroke center (size/2, size/2)
+      var dxC = px - size/2, dyC = py - size/2;
+      var distC = Math.sqrt(dxC*dxC + dyC*dyC) || 1;
+      var scatterX = (dxC/distC) * scatterR * (0.4 + hr()*0.6);
+      var scatterY = (dyC/distC) * scatterR * (0.4 + hr()*0.6);
+
+      // Small random jitter on top of directional scatter
+      var jitter = r * (0.8 + (1-depthFocus)*1.5);
+      var jx = scatterX + (hr()-0.5)*jitter;
+      var jy = scatterY + (hr()-0.5)*jitter;
 
       // Opacity: near=more opaque, far=more transparent
       var alpha = (0.3 + depthFocus*0.4 + hr()*0.3) * (0.5 + edgeFactor*0.5);
