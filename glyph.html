@@ -504,17 +504,24 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var nSeg = 4 + Math.floor(fg()*3);
       var segW = (W+40) / nSeg;
 
-      // Build bezier control points
+      // Build smooth catmull-rom style control points
+      // Key: control points inherit velocity from previous segment — no sharp corners
       var pts = [{x:-20, y:baseY}];
       var cy_cur = baseY;
+      var vy = (fg()-0.5)*30; // initial vertical velocity
       for (var si3=0; si3<nSeg; si3++) {
         var x0 = -20 + si3*segW;
+        // Velocity drifts gently — no abrupt direction change
+        vy += (fg()-0.5)*20;
+        vy *= 0.7; // dampen: tends back toward horizontal
+        var endY = cy_cur + vy;
+        // Control points follow the flow direction — smooth tangent continuity
         pts.push({
-          cp1x: x0+segW*0.33, cp1y: cy_cur+(fg()-0.5)*80,
-          cp2x: x0+segW*0.66, cp2y: cy_cur+(fg()-0.5)*80,
-          x: x0+segW, y: cy_cur+(fg()-0.5)*50
+          cp1x: x0+segW*0.33, cp1y: cy_cur + vy*0.33,
+          cp2x: x0+segW*0.66, cp2y: endY - vy*0.33,
+          x: x0+segW, y: endY
         });
-        cy_cur = pts[pts.length-1].y;
+        cy_cur = endY;
       }
 
       // Sample points along bezier path and draw tiny particles
