@@ -360,15 +360,36 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   var strokes = (data && data.strokes) ? data.strokes : [];
   var strokeLimit = (_strokeLimit !== undefined) ? _strokeLimit : strokes.length;
   var alphaScale = (_dotAlphaScale !== undefined) ? _dotAlphaScale : 1.0;
+  var N = strokes.length;
 
-  // Pre-compute layout (no rotation, variable scale, can bleed off edges)
+  // ── Layout: divide canvas into zones, one stroke per zone ──────────────────
+  // Each stroke gets a "slot" in a grid, then placed near slot center with jitter
+  // This ensures strokes spread across the canvas without crowding
   var layout = [];
-  for (var li = 0; li < strokes.length; li++) {
-    var lcx = W*0.1 + sr() * W*0.8;
-    var lcy = H*0.05 + sr() * H*0.9;
-    var lsz = 150 + sr() * 280;     // 80px to 280px
-    var ldepth = sr();              // 0..1 for color
-    layout.push({ cx: lcx, cy: lcy, size: Math.round(lsz), depth: ldepth });
+  if (N > 0) {
+    // Compute grid: e.g. 4 strokes → 2×2, 6 strokes → 3×2, 9 → 3×3
+    var cols = Math.ceil(Math.sqrt(N * W / H));
+    var rows = Math.ceil(N / cols);
+    var slotW = W / cols;
+    var slotH = H / rows;
+    for (var li = 0; li < N; li++) {
+      var col = li % cols;
+      var row = Math.floor(li / cols);
+      // Center of slot
+      var slotCX = slotW * (col + 0.5);
+      var slotCY = slotH * (row + 0.5);
+      // Jitter within slot (±25%)
+      var jx = (sr() - 0.5) * slotW * 0.5;
+      var jy = (sr() - 0.5) * slotH * 0.5;
+      var lcx = slotCX + jx;
+      var lcy = slotCY + jy;
+      // Stroke size: large, relative to slot size, some bleed off edge
+      var minSz = Math.min(slotW, slotH) * 1.1;
+      var maxSz = Math.min(slotW, slotH) * 2.2;
+      var lsz = minSz + sr() * (maxSz - minSz);
+      var ldepth = 0.3 + sr() * 0.7;
+      layout.push({ cx: lcx, cy: lcy, size: Math.round(lsz), depth: ldepth });
+    }
   }
 
   if (strokes.length > 0) {
@@ -383,7 +404,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       ctx.fillStyle = dotColor;
       for (var di = 0; di < pts.length; di++) {
         var r = 0.3 + Math.random() * 0.5;
-        var a = (0.35 + Math.random() * 0.55) * alphaScale;
+        var a = (0.5 + Math.random() * 0.45) * alphaScale;
         ctx.globalAlpha = a;
         ctx.beginPath();
         ctx.arc(ox + pts[di][0], oy + pts[di][1], r, 0, Math.PI * 2);
