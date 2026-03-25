@@ -77,6 +77,15 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
       </div>
     </div>
     <div class="panel-section">
+      <div class="section-title">Font</div>
+      <div class="btn-group" id="font-group">
+        <button class="btn active" data-font="stroke">楷书 (Stroke)</button>
+        <button class="btn" data-font="serif">宋体 Serif</button>
+        <button class="btn" data-font="sans">黑体 Sans</button>
+        <button class="btn" data-font="traditional">繁体 Trad</button>
+      </div>
+    </div>
+    <div class="panel-section">
       <div class="section-title">Display</div>
       <div class="toggle-row">
         <span>Show stroke order</span>
@@ -186,8 +195,17 @@ var PRESETS = ['山','水','火','木','日','月','人','心','道','美','爱'
 
 // State
 var currentScheme = 'parchment';
+var currentFont = 'stroke'; // stroke | serif | sans | traditional
 var glyphCache = {};
 var animTimer = null;
+
+// Font definitions for canvas rendering
+var FONTS = {
+  stroke:      null, // uses hanzi-writer stroke data
+  serif:       '"Noto Serif SC", "SimSun", serif',
+  sans:        '"Noto Sans SC", "SimHei", sans-serif',
+  traditional: '"Noto Serif SC", "MingLiU", serif'
+};
 
 // DOM refs
 var canvas = document.getElementById('glyph-canvas');
@@ -231,6 +249,23 @@ document.getElementById('scheme-group').addEventListener('click', function(e) {
   }
 });
 
+// ── Font selector ─────────────────────────────────────────────────────────────
+document.getElementById('font-group').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-font]');
+  if (!btn) return;
+  document.querySelectorAll('#font-group .btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  currentFont = btn.dataset.font;
+  var ch = charInput.value.trim();
+  if (ch) {
+    if (currentFont === 'stroke' && glyphCache[ch]) {
+      drawPoster(ch, glyphCache[ch], ETYM[ch] || null);
+    } else if (currentFont !== 'stroke') {
+      drawPosterFont(ch, ETYM[ch] || null);
+    }
+  }
+});
+
 // ── Theme toggle ──────────────────────────────────────────────────────────────
 var isDark = false;
 document.getElementById('btn-theme').addEventListener('click', function() {
@@ -246,15 +281,21 @@ charInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') gener
 function generate() {
   var ch = charInput.value.trim();
   if (!ch) { setStatus('Please enter a character.'); return; }
-  // Take only first character
   ch = ch[0];
   charInput.value = ch;
+
+  // Font mode: render directly from browser font, no stroke data needed
+  if (currentFont !== 'stroke') {
+    setStatus('');
+    drawPosterFont(ch, ETYM[ch] || null);
+    return;
+  }
+
   setStatus('Loading stroke data...');
   fetchGlyph(ch, function(data) {
     if (!data) {
-      setStatus('No stroke data available for this character.');
-      // Draw poster with no stroke data
-      drawPoster(ch, null, ETYM[ch] || null);
+      setStatus('No stroke data, rendering with font...');
+      drawPosterFont(ch, ETYM[ch] || null);
       return;
     }
     setStatus('');
@@ -359,6 +400,103 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed) {
   ctx.translate(-512, -512);
   try { ctx.fill(new Path2D(strokePath)); } catch(e) {}
   ctx.restore();
+}
+
+// ── Font-based poster: render char with browser font, split into N tiles ─────
+function drawPosterFont(ch, etymInfo) {
+  if (animTimer) { clearTimeout(animTimer); animTimer = null; }
+  var sc = SCHEMES[currentScheme];
+  var W = 520, H = 680;
+  ctx.clearRect(0, 0, W, H);
+
+  var ip = {
+    parchment: { dark:[26,18,8],    light:[80,50,20]  },
+    ink:       { dark:[10,8,4],     light:[40,30,10]  },
+    night:     { dark:[192,216,255],light:[96,144,208] },
+    minimal:   { dark:[17,17,17],   light:[100,100,100]}
+  }[currentScheme] || { dark:[26,18,8], light:[80,50,20] };
+
+  function inkColor(t) {
+    return 'rgb('+Math.round(ip.light[0]+(ip.dark[0]-ip.light[0])*t)+','+
+                  Math.round(ip.light[1]+(ip.dark[1]-ip.light[1])*t)+','+
+                  Math.round(ip.light[2]+(ip.dark[2]-ip.light[2])*t)+')';
+  }
+
+  // Background
+  ctx.fillStyle = sc.bg; ctx.fillRect(0,0,W,H);
+  var gs = 99991; function gr(){gs=(gs*1664525+1013904223)&0x7fffffff;return gs/0x7fffffff;}
+  for (var gi=0;gi<800;gi++){
+    ctx.fillStyle='rgba(80,50,20,'+(0.01+gr()*0.03)+')';
+    ctx.fillRect(gr()*W,gr()*H,1,1);
+  }
+
+  // Render char to large offscreen canvas
+  var fontStr = FONTS[currentFont] || FONTS.serif;
+  var N = 6; // split into N "pseudo-strokes" by tiling the char
+  var seed = ch.codePointAt(0);
+  function sr(){seed=(seed*1664525+1013904223)&0x7fffffff;return seed/0x7fffffff;}
+
+  // Grid layout (same as stroke mode)
+  var cols = Math.ceil(Math.sqrt(N * W / H));
+  var rows = Math.ceil(N / cols);
+  var slotW = W / cols, slotH = H / rows;
+
+  for (var i=0; i<N; i++) {
+    var col = i % cols, row = Math.floor(i/cols);
+    var slotCX = slotW*(col+0.5) + (sr()-0.5)*slotW*0.5;
+    var slotCY = slotH*(row+0.5) + (sr()-0.5)*slotH*0.5;
+    var sz = Math.round(Math.min(slotW,slotH)*(2.5+sr()*2.0));
+    var depth = 0.3+sr()*0.7;
+
+    // Render char at sz to offscreen, with random crop offset
+    var ofc = document.createElement('canvas');
+    ofc.width = sz; ofc.height = sz;
+    var ofx = ofc.getContext('2d');
+    var fontSize = sz * 0.9;
+    ofx.font = fontSize+'px '+fontStr;
+    ofx.textAlign = 'center';
+    ofx.textBaseline = 'middle';
+    // Random position offset — each tile shows a different "part" of the char
+    var offX = (sr()-0.5)*sz*0.3;
+    var offY = (sr()-0.5)*sz*0.3;
+    ofx.fillStyle = '#000';
+    ofx.fillText(ch, sz/2+offX, sz/2+offY);
+
+    // Punch holes (same as renderInkStroke)
+    var hs = seed+i*7919; function hr2(){hs=(hs*1664525+1013904223)&0x7fffffff;return hs/0x7fffffff;}
+    ofx.globalCompositeOperation='destination-out';
+    for (var v=0;v<4+Math.floor(hr2()*4);v++){
+      ofx.globalAlpha=0.4+hr2()*0.4;
+      ofx.beginPath();ofx.arc(hr2()*sz,hr2()*sz,sz*(0.04+hr2()*0.08),0,Math.PI*2);ofx.fill();
+    }
+    for (var v2=0;v2<15+Math.floor(hr2()*20);v2++){
+      ofx.globalAlpha=0.3+hr2()*0.5;
+      ofx.beginPath();ofx.arc(hr2()*sz,hr2()*sz,sz*(0.006+hr2()*0.02),0,Math.PI*2);ofx.fill();
+    }
+    ofx.globalCompositeOperation='source-over'; ofx.globalAlpha=1;
+
+    ctx.save();
+    ctx.globalAlpha=0.8+hr2()*0.2;
+    ctx.drawImage(ofc, slotCX-sz/2, slotCY-sz/2);
+    // Color tint
+    ctx.globalAlpha=0.15; ctx.fillStyle=inkColor(depth);
+    ctx.fillRect(slotCX-sz/2, slotCY-sz/2, sz, sz);
+    ctx.restore();
+  }
+
+  // Minimal overlay
+  ctx.save();
+  ctx.font='40px "Noto Serif SC",serif'; ctx.fillStyle=inkColor(1.0);
+  ctx.globalAlpha=0.12; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillText(ch,28,H-44); ctx.restore();
+  if (etymInfo&&etymInfo.pinyin){
+    ctx.save(); ctx.font='10px Outfit,sans-serif'; ctx.fillStyle=inkColor(0.8);
+    ctx.globalAlpha=0.35; ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(etymInfo.pinyin,28,H-36); ctx.restore();
+  }
+  ctx.save(); ctx.font='8px Outfit,sans-serif'; ctx.fillStyle=inkColor(0.5);
+  ctx.globalAlpha=0.18; ctx.textAlign='right'; ctx.textBaseline='bottom';
+  ctx.fillText('Glyph It',W-20,H-16); ctx.restore();
 }
 
 // ── Draw poster — ink stamp style ────────────────────────────────────────────
