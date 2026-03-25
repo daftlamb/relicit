@@ -472,33 +472,41 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   var alphaScale = (_dotAlphaScale !== undefined) ? _dotAlphaScale : 1.0;
   var N = strokes.length;
 
-  // ── Layout: divide canvas into zones, one stroke per zone ──────────────────
-  // Each stroke gets a "slot" in a grid, then placed near slot center with jitter
-  // This ensures strokes spread across the canvas without crowding
+  // ── Layout: force-repulsion scatter ────────────────────────────────────────
+  // Strokes start random, then repel each other for even natural spread
   var layout = [];
   if (N > 0) {
-    // Compute grid: e.g. 4 strokes → 2×2, 6 strokes → 3×2, 9 → 3×3
-    var cols = Math.ceil(Math.sqrt(N * W / H));
-    var rows = Math.ceil(N / cols);
-    var slotW = W / cols;
-    var slotH = H / rows;
+    var margin = 60;
+    var areaW = W - margin*2, areaH = (H-56) - margin*2;
+    // Init random positions
     for (var li = 0; li < N; li++) {
-      var col = li % cols;
-      var row = Math.floor(li / cols);
-      // Center of slot
-      var slotCX = slotW * (col + 0.5);
-      var slotCY = slotH * (row + 0.5);
-      // Jitter within slot (±25%)
-      var jx = (sr() - 0.5) * slotW * 0.5;
-      var jy = (sr() - 0.5) * slotH * 0.5;
-      var lcx = slotCX + jx;
-      var lcy = slotCY + jy;
-      // Stroke size: very large relative to slot, aggressively bleed off edges
-      var minSz = Math.min(slotW, slotH) * 2.5;
-      var maxSz = Math.min(slotW, slotH) * 4.5;
-      var lsz = minSz + sr() * (maxSz - minSz);
-      var ldepth = 0.3 + sr() * 0.7;
-      layout.push({ cx: lcx, cy: lcy, size: Math.round(lsz), depth: ldepth });
+      var lsz = Math.round(Math.min(W,H-56) * (0.45 + sr()*0.45));
+      layout.push({
+        cx: margin + sr()*areaW,
+        cy: margin + sr()*areaH,
+        size: lsz,
+        depth: 0.3 + sr()*0.7
+      });
+    }
+    // Repulsion iterations
+    var minDist = Math.min(W, H-56) * 0.28;
+    for (var iter = 0; iter < 80; iter++) {
+      for (var a = 0; a < N; a++) {
+        var fx = 0, fy = 0;
+        for (var b = 0; b < N; b++) {
+          if (a === b) continue;
+          var dx = layout[a].cx - layout[b].cx;
+          var dy = layout[a].cy - layout[b].cy;
+          var dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          if (dist < minDist) {
+            var force = (minDist - dist) / minDist * 0.5;
+            fx += (dx/dist) * force;
+            fy += (dy/dist) * force;
+          }
+        }
+        layout[a].cx = Math.max(margin, Math.min(W-margin, layout[a].cx + fx*minDist));
+        layout[a].cy = Math.max(margin, Math.min(H-56-margin, layout[a].cy + fy*minDist));
+      }
     }
   }
 
@@ -584,23 +592,29 @@ function animatePoster(ch, data, etymInfo) {
   var W = 720, H = 1020;
   var sc2 = SCHEMES[currentScheme];
 
-  // Pre-compute layout (same as drawPoster so positions match)
+  // Pre-compute layout — force-repulsion (same seed as drawPoster)
   var seed2 = ch.codePointAt(0);
   function sr2() { seed2=(seed2*1664525+1013904223)&0x7fffffff; return seed2/0x7fffffff; }
   var N = total;
-  var cols = Math.ceil(Math.sqrt(N * W / H));
-  var rows = Math.ceil(N / cols);
-  var slotW = W/cols, slotH = H/rows;
+  var margin2=60, areaW2=W-margin2*2, areaH2=(H-56)-margin2*2;
   var preLayout = [];
   for (var li2=0; li2<N; li2++) {
-    var col2=li2%cols, row2=Math.floor(li2/cols);
-    var slotCX2=slotW*(col2+0.5)+(sr2()-0.5)*slotW*0.5;
-    var slotCY2=slotH*(row2+0.5)+(sr2()-0.5)*slotH*0.5;
-    var minSz=Math.min(slotW,slotH)*2.5, maxSz=Math.min(slotW,slotH)*4.5;
-    var sz2=Math.round(minSz+sr2()*(maxSz-minSz));
-    var dep2=0.3+sr2()*0.7;
-    var focus2=0.2+sr2()*0.8;
-    preLayout.push({cx:slotCX2,cy:slotCY2,size:sz2,depth:dep2,focus:focus2});
+    var lsz2=Math.round(Math.min(W,H-56)*(0.45+sr2()*0.45));
+    preLayout.push({cx:margin2+sr2()*areaW2, cy:margin2+sr2()*areaH2, size:lsz2, depth:0.3+sr2()*0.7, focus:0.2+sr2()*0.8});
+  }
+  var minDist2=Math.min(W,H-56)*0.28;
+  for (var iter2=0;iter2<80;iter2++){
+    for(var a2=0;a2<N;a2++){
+      var fx2=0,fy2=0;
+      for(var b2=0;b2<N;b2++){
+        if(a2===b2) continue;
+        var dx2=preLayout[a2].cx-preLayout[b2].cx, dy2=preLayout[a2].cy-preLayout[b2].cy;
+        var dist2=Math.sqrt(dx2*dx2+dy2*dy2)||1;
+        if(dist2<minDist2){var f2=(minDist2-dist2)/minDist2*0.5;fx2+=(dx2/dist2)*f2;fy2+=(dy2/dist2)*f2;}
+      }
+      preLayout[a2].cx=Math.max(margin2,Math.min(W-margin2,preLayout[a2].cx+fx2*minDist2));
+      preLayout[a2].cy=Math.max(margin2,Math.min(H-56-margin2,preLayout[a2].cy+fy2*minDist2));
+    }
   }
 
   var ip2={parchment:{dark:[26,18,8],light:[80,50,20]},ink:{dark:[10,8,4],light:[40,30,10]},night:{dark:[192,216,255],light:[96,144,208]},minimal:{dark:[17,17,17],light:[136,136,136]},crimson:{dark:[255,68,85],light:[180,20,40]},forest:{dark:[125,220,138],light:[40,120,55]},dusk:{dark:[224,170,255],light:[140,80,200]},paper:{dark:[26,42,74],light:[80,110,160]}}[currentScheme]||{dark:[26,18,8],light:[80,50,20]};
@@ -657,19 +671,22 @@ function animatePoster(ch, data, etymInfo) {
         var scX2=(dxC2/dc2)*scR2*(0.4+hr3()*0.6);
         var scY2=(dyC2/dc2)*scR2*(0.4+hr3()*0.6);
         var jit2=rr2*(0.8+(1-sl2.focus)*1.5);
+        // Pre-compute start position so each frame doesn't re-randomize
+        var sxRaw = (hr3()-0.5); var syRaw = (hr3()-0.5);
         dots.push({
           tx: ox2+px3+scX2+(hr3()-0.5)*jit2,
           ty: oy2+py2+scY2+(hr3()-0.5)*jit2,
+          // Start: random position around center, pre-baked
+          sx: W*0.5 + sxRaw*W*0.65,
+          sy: (H-56)*0.5 + syRaw*(H-56)*0.45,
           r:  rr2,
           al: (0.3+sl2.focus*0.4+hr3()*0.3)*(0.5+ef2*0.5),
           cr: Math.min(255,ip2r+Math.round((hr3()-0.5)*20)),
           cg: Math.min(255,ip2g+Math.round((hr3()-0.5)*12)),
           cb: Math.min(255,ip2b+Math.round((hr3()-0.5)*8)),
           elong: hr3()>0.85, angle: hr3()*Math.PI,
-          // wind: per-particle noise offset applied mid-flight
-          wx: (hr3()-0.5)*W*0.18,  // lateral wind drift (peaks at t=0.45)
-          wy: (hr3()-0.5)*(H-56)*0.12,
-          // phase offset so not all particles move in sync
+          wx: (hr3()-0.5)*W*0.15,
+          wy: (hr3()-0.5)*(H-56)*0.10,
           phase: hr3()*0.35
         });
       }
@@ -677,73 +694,73 @@ function animatePoster(ch, data, etymInfo) {
     strokeDots.push(dots);
   }
 
-  // ── Draw one stroke's dots at lerp position ─────────────────────────────────
-  // t=0: dots scattered (random start pos), t=1: dots at target
-  function drawStrokeDots(si3, t) {
+  // ── Settled canvas: cache completed strokes so we don't redraw all dots every frame ──
+  var settledCanvas = document.createElement('canvas');
+  settledCanvas.width = W; settledCanvas.height = H;
+  var settledCtx = settledCanvas.getContext('2d');
+
+  function drawStrokeDots(targetCtx, si3, t) {
     var dots=strokeDots[si3];
-    // Easing: ease-in-out cubic for smooth gather
     var et = t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
-    // Spring overshoot near end
-    var spring = t > 0.85 ? 1 + Math.sin((t-0.85)/0.15*Math.PI)*0.035*(1-t/1) : 1;
-
-    var hs4=seed2+si3*31337; function hr4(){hs4=(hs4*1664525+1013904223)&0x7fffffff;return hs4/0x7fffffff;}
-
+    var spring = t > 0.85 ? 1 + Math.sin((t-0.85)/0.15*Math.PI)*0.03 : 1;
     for(var di=0;di<dots.length;di++){
       var d=dots[di];
-      // Start position: scattered from canvas center region
-      var startX = W*0.5 + (hr4()-0.5)*W*0.7;
-      var startY = (H-56)*0.5 + (hr4()-0.5)*(H-56)*0.5;
-
-      // Wind arc: bezier-like curve via mid-point offset
-      // At t=0.5 the particle is at its most "blown" position
-      // wind envelope: sin(t*PI) peaks at t=0.5, zero at start and end
-      var tp = Math.max(0, t - d.phase); // phase-shifted t per particle
-      var windEnv = Math.sin(Math.min(tp, 1) * Math.PI); // bell curve 0→1→0
-      var windX = d.wx * windEnv * 0.6;
-      var windY = d.wy * windEnv * 0.6;
-
-      var curX = (startX + (d.tx - startX) * et * spring) + windX;
-      var curY = (startY + (d.ty - startY) * et * spring) + windY;
-
-      ctx.globalAlpha = d.al * Math.min(t*4, 1);
-      ctx.fillStyle='rgb('+d.cr+','+d.cg+','+d.cb+')';
-      ctx.beginPath();
-      if(d.elong){ctx.ellipse(curX,curY,d.r*1.4,d.r*0.5,d.angle,0,Math.PI*2);}
-      else{ctx.arc(curX,curY,d.r,0,Math.PI*2);}
-      ctx.fill();
+      var tp = Math.max(0, t - d.phase);
+      var windEnv = Math.sin(Math.min(tp,1)*Math.PI);
+      var curX = (d.sx + (d.tx - d.sx)*et*spring) + d.wx*windEnv*0.5;
+      var curY = (d.sy + (d.ty - d.sy)*et*spring) + d.wy*windEnv*0.5;
+      targetCtx.globalAlpha = d.al * Math.min(t*5,1);
+      targetCtx.fillStyle='rgb('+d.cr+','+d.cg+','+d.cb+')';
+      targetCtx.beginPath();
+      if(d.elong){targetCtx.ellipse(curX,curY,d.r*1.4,d.r*0.5,d.angle,0,Math.PI*2);}
+      else{targetCtx.arc(curX,curY,d.r,0,Math.PI*2);}
+      targetCtx.fill();
     }
-    ctx.globalAlpha=1;
+    targetCtx.globalAlpha=1;
+  }
+
+  function settleStroke(si3) {
+    // Bake finished stroke onto settledCanvas at t=1
+    drawStrokeDots(settledCtx, si3, 1.0);
   }
 
   // All strokes launch simultaneously with random delay + duration
-  var strokeStates = []; // {startTime, delay, dur} per stroke
+  var strokeStates = [];
   var sr3seed = seed2 + 9999;
   function sr3(){sr3seed=(sr3seed*1664525+1013904223)&0x7fffffff;return sr3seed/0x7fffffff;}
   for (var ki=0; ki<total; ki++) {
     strokeStates.push({
       startTime: null,
-      delay: sr3() * 800,      // 0–800ms random stagger
-      dur:   900 + sr3() * 600  // 900–1500ms each, different speeds
+      delay: sr3() * 600,
+      dur:   800 + sr3() * 500,
+      settled: false
     });
   }
   var allDone = false;
 
   function allGatherFrame(ts) {
     if (allDone) return;
+    // Composite: bg + settled cache + active strokes
     drawBg();
+    ctx.drawImage(settledCanvas, 0, 0); // paste already-settled strokes (fast)
 
     var finishedCount = 0;
     for (var ai=0; ai<total; ai++) {
       var st = strokeStates[ai];
       if (st.startTime === null) st.startTime = ts;
       var elapsed = ts - st.startTime - st.delay;
-      if (elapsed < 0) {
-        // Not started yet — skip drawing
-        continue;
-      }
+      if (elapsed < 0) { continue; }
       var t = Math.min(elapsed / st.dur, 1);
-      drawStrokeDots(ai, t);
-      if (t >= 1) finishedCount++;
+
+      if (t >= 1) {
+        if (!st.settled) {
+          st.settled = true;
+          settleStroke(ai); // bake into settled canvas once
+        }
+        finishedCount++;
+      } else {
+        drawStrokeDots(ctx, ai, t); // only draw animating strokes live
+      }
     }
 
     drawOverlay();
