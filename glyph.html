@@ -742,7 +742,7 @@ function animatePoster(ch, data, etymInfo) {
     var minSz=Math.min(slotW,slotH)*2.5, maxSz=Math.min(slotW,slotH)*4.5;
     var sz2=Math.round(minSz+sr2()*(maxSz-minSz));
     var dep2=0.3+sr2()*0.7;
-    var focus2=0.2+sr2()*0.8; // depth focus for bokeh
+    var focus2=0.2+sr2()*0.8;
     preLayout.push({cx:slotCX2,cy:slotCY2,size:sz2,depth:dep2,focus:focus2});
   }
 
@@ -764,38 +764,113 @@ function animatePoster(ch, data, etymInfo) {
     ctx.save();ctx.font='300 9px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.35;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-16,H-10);ctx.restore();
   }
 
+  // ── Pre-sample all stroke pixels once ──────────────────────────────────────
+  // Each stroke: array of {tx,ty,r,al,cr,cg,cb} — target positions
+  var strokeDots = [];
+  for (var si2=0; si2<total; si2++) {
+    var sl2=preLayout[si2];
+    var ofc2=document.createElement('canvas');
+    ofc2.width=sl2.size; ofc2.height=sl2.size;
+    var ofx2=ofc2.getContext('2d');
+    ofx2.save(); ofx2.translate(sl2.size/2,sl2.size/2);
+    ofx2.scale(sl2.size/1024,-sl2.size/1024);
+    ofx2.translate(-512,-512);
+    ofx2.fillStyle='#000';
+    try{ofx2.fill(new Path2D(data.strokes[si2]));}catch(e){}
+    ofx2.restore();
+    var imd=ofx2.getImageData(0,0,sl2.size,sl2.size);
+    var hs3=seed2+si2*7919; function hr3(){hs3=(hs3*1664525+1013904223)&0x7fffffff;return hs3/0x7fffffff;}
+    var dots=[];
+    var blurAmt2=(1-sl2.focus)*sl2.size*0.18;
+    var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
+    var keepR2=0.2+sl2.focus*0.55;
+    var ox2=sl2.cx-sl2.size/2, oy2=sl2.cy-sl2.size/2;
+    for(var py2=0;py2<sl2.size;py2+=1){
+      for(var px3=0;px3<sl2.size;px3+=1){
+        var pidx2=(py2*sl2.size+px3)*4;
+        if(imd.data[pidx2+3]<60) continue;
+        if(hr3()>keepR2) continue;
+        var ef2=imd.data[pidx2+3]/255;
+        var br2=(0.2+sl2.focus*0.5)+hr3()*(0.3+sl2.focus*0.4);
+        var rr2=br2*(0.6+ef2*0.4);
+        var esc2=1-ef2;
+        var scR2=blurAmt2*(esc2*0.7+0.3);
+        var dxC2=px3-sl2.size/2,dyC2=py2-sl2.size/2;
+        var dc2=Math.sqrt(dxC2*dxC2+dyC2*dyC2)||1;
+        var scX2=(dxC2/dc2)*scR2*(0.4+hr3()*0.6);
+        var scY2=(dyC2/dc2)*scR2*(0.4+hr3()*0.6);
+        var jit2=rr2*(0.8+(1-sl2.focus)*1.5);
+        dots.push({
+          tx: ox2+px3+scX2+(hr3()-0.5)*jit2,
+          ty: oy2+py2+scY2+(hr3()-0.5)*jit2,
+          r:  rr2,
+          al: (0.3+sl2.focus*0.4+hr3()*0.3)*(0.5+ef2*0.5),
+          cr: Math.min(255,ip2r+Math.round((hr3()-0.5)*20)),
+          cg: Math.min(255,ip2g+Math.round((hr3()-0.5)*12)),
+          cb: Math.min(255,ip2b+Math.round((hr3()-0.5)*8)),
+          elong: hr3()>0.85, angle: hr3()*Math.PI
+        });
+      }
+    }
+    strokeDots.push(dots);
+  }
+
+  // ── Draw one stroke's dots at lerp position ─────────────────────────────────
+  // t=0: dots scattered (random start pos), t=1: dots at target
+  function drawStrokeDots(si3, t) {
+    var dots=strokeDots[si3];
+    var sl3=preLayout[si3];
+    // easing: ease-out cubic
+    var et = 1 - Math.pow(1-t, 3);
+    // slight overshoot spring at the end
+    var spring = t >= 0.9 ? 1 + Math.sin((t-0.9)/0.1*Math.PI)*0.04 : 1;
+
+    var hs4=seed2+si3*31337; function hr4(){hs4=(hs4*1664525+1013904223)&0x7fffffff;return hs4/0x7fffffff;}
+
+    for(var di=0;di<dots.length;di++){
+      var d=dots[di];
+      // Start position: scattered around canvas center, biased toward stroke center
+      var startX = W*0.5 + (hr4()-0.5)*W*0.7;
+      var startY = (H-56)*0.5 + (hr4()-0.5)*(H-56)*0.5;
+      var curX = startX + (d.tx - startX)*et*spring;
+      var curY = startY + (d.ty - startY)*et*spring;
+      ctx.globalAlpha = d.al * Math.min(t*3, 1); // fade in early
+      ctx.fillStyle='rgb('+d.cr+','+d.cg+','+d.cb+')';
+      ctx.beginPath();
+      if(d.elong){ctx.ellipse(curX,curY,d.r*1.4,d.r*0.5,d.angle,0,Math.PI*2);}
+      else{ctx.arc(curX,curY,d.r,0,Math.PI*2);}
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+
   var revealed = [];
+  var revealedT = []; // t=1 for each revealed stroke
 
   function runStroke(idx) {
     if (idx >= total) { drawPoster(ch, data, etymInfo); return; }
-    var sl = preLayout[idx];
-    var inkCol = inkColor2(sl.depth);
-    var holeSeed = seed2 + idx*7919;
     var startTime = null;
-    var fadeDur = 600;
+    var dur = 900; // ms per stroke gather animation
 
-    function fadeFrame(ts) {
+    function gatherFrame(ts) {
       if (!startTime) startTime = ts;
-      var alpha = Math.min((ts-startTime)/fadeDur, 1);
-      // Redraw bg + revealed strokes
+      var t = Math.min((ts-startTime)/dur, 1);
       drawBg();
-      for (var ri=0; ri<revealed.length; ri++) {
-        var rs=revealed[ri];
-        renderInkStroke(ctx, data.strokes[rs], preLayout[rs].cx, preLayout[rs].cy, preLayout[rs].size, inkColor2(preLayout[rs].depth), seed2+rs*7919, preLayout[rs].focus);
+      // Draw already-settled strokes at t=1
+      for(var ri=0;ri<revealed.length;ri++){
+        drawStrokeDots(revealed[ri], 1.0);
       }
-      // Fade in current stroke via globalAlpha
-      ctx.save(); ctx.globalAlpha=alpha;
-      renderInkStroke(ctx, data.strokes[idx], sl.cx, sl.cy, sl.size, inkCol, holeSeed, sl.focus);
-      ctx.restore();
+      // Current stroke gathering
+      drawStrokeDots(idx, t);
       drawOverlay();
-      if (alpha < 1) {
-        animTimer = requestAnimationFrame(fadeFrame);
+      if (t < 1) {
+        animTimer = requestAnimationFrame(gatherFrame);
       } else {
         revealed.push(idx);
-        animTimer = setTimeout(function(){ runStroke(idx+1); }, 120);
+        animTimer = setTimeout(function(){ runStroke(idx+1); }, 60);
       }
     }
-    animTimer = requestAnimationFrame(fadeFrame);
+    animTimer = requestAnimationFrame(gatherFrame);
   }
 
   drawBg(); drawOverlay();
