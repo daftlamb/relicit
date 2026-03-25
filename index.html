@@ -176,24 +176,39 @@ drawEmpty();
 
 // ---- Met Museum API ----
 function searchMet(query, cb) {
-  var url = 'https://collectionapi.metmuseum.org/public/collection/v1/search'
+  var searchUrl = 'https://collectionapi.metmuseum.org/public/collection/v1/search'
     + '?q=' + encodeURIComponent(query)
-    + '&hasImages=true&limit=20';
-  fetch(url)
-    .then(function(r){return r.json();})
+    + '&hasImages=true';
+  fetch(searchUrl)
+    .then(function(r){ return r.json(); })
     .then(function(d){
-      if (!d.objectIDs || d.objectIDs.length === 0) { cb('No results'); return; }
-      // Pick a random object from top 20
-      var ids = d.objectIDs.slice(0, 20);
+      if (!d.objectIDs || d.objectIDs.length === 0) {
+        cb('No results found for "' + query + '"'); return;
+      }
+      var ids = d.objectIDs.slice(0, 30);
       var id = ids[Math.floor(Math.random() * ids.length)];
-      return fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id);
+      fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id)
+        .then(function(r){ return r.json(); })
+        .then(function(obj){
+          if (obj && (obj.primaryImageSmall || obj.primaryImage)) {
+            obj._imgUrl = obj.primaryImageSmall || obj.primaryImage;
+            cb(null, obj);
+          } else {
+            // Try next one
+            var id2 = ids[Math.floor(Math.random() * ids.length)];
+            fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id2)
+              .then(function(r2){ return r2.json(); })
+              .then(function(obj2){
+                if (obj2 && (obj2.primaryImageSmall || obj2.primaryImage)) {
+                  obj2._imgUrl = obj2.primaryImageSmall || obj2.primaryImage;
+                  cb(null, obj2);
+                } else { cb('No image available, try another search'); }
+              }).catch(function(e){ cb(e.toString()); });
+          }
+        })
+        .catch(function(e){ cb(e.toString()); });
     })
-    .then(function(r){return r.json();})
-    .then(function(obj){
-      if (obj && obj.primaryImageSmall) cb(null, obj);
-      else cb('No image available');
-    })
-    .catch(function(e){ cb(e.toString()); });
+    .catch(function(e){ cb('Network error: ' + e.toString()); });
 }
 
 // ---- Paper texture ----
@@ -387,7 +402,7 @@ function doSearch(query) {
     document.getElementById('rc-meta').textContent = meta || obj.medium || '';
     document.getElementById('result-card').style.display = 'block';
 
-    loadImage(obj.primaryImageSmall, function(imgErr, img) {
+    loadImage(obj._imgUrl || obj.primaryImageSmall, function(imgErr, img) {
       document.getElementById('status').textContent = '';
       if (imgErr) {
         document.getElementById('status').textContent = 'Image load failed, try another';
@@ -413,7 +428,7 @@ document.querySelectorAll('.chip').forEach(function(c){
 });
 document.getElementById('btn-generate').addEventListener('click', function(){
   if(currentObj){
-    loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+    loadImage(currentObj._imgUrl || currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
   } else {
     var v=document.getElementById('search-input').value.trim()||'Tang dynasty ceramic';
     doSearch(v);
@@ -428,7 +443,7 @@ document.querySelectorAll('#style-group .btn').forEach(function(b){
     document.getElementById('col-bg').value=st.bg;
     document.getElementById('col-accent').value=st.accent;
     document.getElementById('col-text').value=st.text;
-    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+    if(currentObj) loadImage(currentObj._imgUrl || currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
   });
 });
 document.querySelectorAll('#frame-group .btn').forEach(function(b){
@@ -436,12 +451,12 @@ document.querySelectorAll('#frame-group .btn').forEach(function(b){
     document.querySelectorAll('#frame-group .btn').forEach(function(x){x.classList.remove('active');});
     this.classList.add('active');
     currentFrame=b.dataset.f;
-    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+    if(currentObj) loadImage(currentObj._imgUrl || currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
   });
 });
 ['col-bg','col-accent','col-text'].forEach(function(id){
   document.getElementById(id).addEventListener('input',function(){
-    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+    if(currentObj) loadImage(currentObj._imgUrl || currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
   });
 });
 document.getElementById('btn-export').addEventListener('click',function(){
