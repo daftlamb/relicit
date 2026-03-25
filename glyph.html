@@ -301,8 +301,8 @@ function sampleStroke(strokePath, size) {
   ofx.restore();
   var imgData = ofx.getImageData(0, 0, size, size);
   var pts = [];
-  for (var py = 0; py < size; py++) {
-    for (var px = 0; px < size; px++) {
+  for (var py = 0; py < size; py += 2) {
+    for (var px = 0; px < size; px += 2) {
       var idx = (py * size + px) * 4;
       if (imgData.data[idx + 3] > 80) {
         pts.push([px, py]);
@@ -411,7 +411,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var oy = sl.cy - sl.size / 2;
       ctx.fillStyle = dotColor;
       for (var di = 0; di < pts.length; di++) {
-        var r = 0.5 + Math.random() * 0.8;
+        var r = 1.2 + Math.random() * 1.4;
         var a = (0.5 + Math.random() * 0.45) * alphaScale;
         ctx.globalAlpha = a;
         ctx.beginPath();
@@ -517,7 +517,7 @@ function animatePoster(ch, data, etymInfo) {
     var oy = sl.cy - sl.size / 2;
     ctx.fillStyle = dotColor;
     for (var di = 0; di < pts.length; di++) {
-      var r = 0.3 + Math.random() * 0.5;
+      var r = 1.2 + Math.random() * 1.4;
       var a = (0.35 + Math.random() * 0.55) * alphaScale;
       ctx.globalAlpha = a;
       ctx.beginPath();
