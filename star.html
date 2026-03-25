@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Star It — Night Sky Poster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Noto+Sans+SC:wght@300;400&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f5f5f5;--panel-bg:#fff;--border:#e0e0e0;--text:#1a1a1a;--muted:#888;--accent:#39ff14;--header-bg:#fff;--header-h:44px}
+[data-theme="dark"]{--bg:#141414;--panel-bg:#1e1e1e;--border:#2a2a2a;--text:#f0f0f0;--muted:#666;--accent:#39ff14;--header-bg:#0e0e0e}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Outfit','Noto Sans SC',sans-serif;font-size:13px;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+header{height:var(--header-h);background:var(--header-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;z-index:100}
+.brand{font-size:16px;font-weight:500}.brand-it{color:var(--accent)}
+.header-spacer{flex:1}
+.btn-icon{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;height:28px;cursor:pointer;font-family:inherit;font-size:12px;padding:0 10px;transition:all .15s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+#app{display:flex;flex:1;min-height:0}
+#panel{width:300px;flex-shrink:0;background:var(--panel-bg);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.panel-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.section-title{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s}
+.btn:hover,.btn.active{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);border:none;color:#000;border-radius:6px;padding:9px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;width:100%;margin-top:8px}
+.btn-primary:hover{opacity:.85}
+.field-row{margin-bottom:8px}
+.field-row label{display:block;font-size:10px;color:var(--muted);margin-bottom:3px;letter-spacing:.04em}
+.field-row input[type=text],.field-row input[type=date],.field-row input[type=time]{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:12px;outline:none;transition:border-color .15s}
+.field-row input:focus{border-color:var(--accent)}
+.btn-group{display:flex;gap:4px;flex-wrap:wrap}
+.btn-group .btn{font-size:11px;padding:4px 10px}
+.color-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--muted)}
+input[type=color]{width:32px;height:22px;border:1px solid var(--border);border-radius:4px;cursor:pointer;padding:1px;background:none}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px}
+.toggle-switch{position:relative;width:32px;height:18px;cursor:pointer;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:9px;transition:background .2s}
+.toggle-switch input:checked+.toggle-track{background:var(--accent)}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-switch input:checked~.toggle-knob{transform:translateX(14px)}
+#search-results{margin-top:4px;border:1px solid var(--border);border-radius:6px;overflow:hidden;display:none;background:var(--panel-bg)}
+.sr-item{padding:7px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--border)}
+.sr-item:last-child{border-bottom:none}
+.sr-item:hover{background:var(--bg)}
+#panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
+#status{font-size:11px;color:var(--muted);min-height:14px;margin-top:6px}
+#canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
+#star-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15)}
+@media(max-width:700px){
+  #app{flex-direction:column}
+  #panel{width:100%;height:auto;max-height:52vh;border-right:none;border-top:1px solid var(--border);order:2;overflow-y:auto}
+  #canvas-area{flex:1;order:1}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Star<span class="brand-it">It</span></div>
+  <div class="header-spacer"></div>
+  <button class="btn-icon" id="btn-export">↓ PNG</button>
+  <button class="btn-icon" id="btn-about">About</button>
+</header>
+<div id="app">
+  <div id="panel">
+    <div class="panel-section">
+      <div class="section-title">Date &amp; Location</div>
+      <div class="field-row"><label>DATE</label><input type="date" id="inp-date"/></div>
+      <div class="field-row"><label>TIME (LOCAL)</label><input type="time" id="inp-time" value="21:00"/></div>
+      <div class="field-row">
+        <label>LOCATION</label>
+        <input type="text" id="inp-loc" placeholder="City name…"/>
+        <div id="search-results"></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px;font-size:11px;color:var(--muted)">
+        <span>Lat:</span><span id="disp-lat">—</span>
+        <span style="margin-left:8px">Lon:</span><span id="disp-lon">—</span>
+      </div>
+      <button class="btn-primary" id="btn-generate">Generate Star Map</button>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Style</div>
+      <div class="btn-group" id="style-group">
+        <button class="btn active" data-s="night">Night</button>
+        <button class="btn" data-s="cosmos">Cosmos</button>
+        <button class="btn" data-s="dawn">Dawn</button>
+        <button class="btn" data-s="minimal">Minimal</button>
+      </div>
+      <div class="color-row"><span>Background</span><input type="color" id="col-bg" value="#0d1b2a"/></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Frame</div>
+      <div class="btn-group" id="frame-group">
+        <button class="btn active" data-f="circle">Circle</button>
+        <button class="btn" data-f="polaroid">Polaroid</button>
+        <button class="btn" data-f="label">Label</button>
+        <button class="btn" data-f="none">None</button>
+      </div>
+      <div class="color-row"><span>Frame Color</span><input type="color" id="col-frame" value="#c8a84b"/></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Display</div>
+      <div class="toggle-row"><span>Star names</span><label class="toggle-switch"><input type="checkbox" id="tog-names" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label></div>
+      <div class="toggle-row"><span>Constellation lines</span><label class="toggle-switch"><input type="checkbox" id="tog-lines" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label></div>
+      <div class="toggle-row"><span>Constellation names</span><label class="toggle-switch"><input type="checkbox" id="tog-cnames" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label></div>
+      <div class="toggle-row"><span>Grid circles</span><label class="toggle-switch"><input type="checkbox" id="tog-grid" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label></div>
+    </div>
+
+    <div id="panel-export">
+      <button class="btn-primary" id="btn-export2">↓ Export PNG</button>
+    </div>
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="star-canvas" width="520" height="520"></canvas>
+  </div>
+</div>
+<script>
+// ---- Star data: [RA_hours, Dec_deg, magnitude, name] ----
+var STARS = [
+[6.75,-16.72,-1.46,"Sirius"],[6.40,-52.70,-0.74,"Canopus"],[14.26,19.18,-0.05,"Arcturus"],
+[18.62,38.78,0.03,"Vega"],[5.28,46.00,0.08,"Capella"],[5.24,-8.20,0.13,"Rigel"],
+[7.65,5.22,0.34,"Procyon"],[1.63,-57.24,0.46,"Achernar"],[5.92,7.41,0.50,"Betelgeuse"],
+[14.06,-60.37,0.61,"Hadar"],[19.85,8.87,0.76,"Altair"],[4.60,16.51,0.87,"Aldebaran"],
+[16.49,-26.43,0.92,"Antares"],[13.42,-11.16,0.98,"Spica"],[7.76,28.03,1.16,"Pollux"],
+[22.96,-29.62,1.17,"Fomalhaut"],[20.69,45.28,1.25,"Deneb"],[10.14,11.97,1.36,"Regulus"],
+[6.98,-28.97,1.50,"Adhara"],[7.58,31.89,1.58,"Castor"],[12.44,-63.10,1.63,null],
+[11.14,61.75,1.77,"Dubhe"],[4.30,15.63,1.65,"Elnath"],[3.79,24.11,2.87,"Alcyone"],
+[21.74,9.88,1.96,"Enif"],[8.16,-47.34,1.99,null],[22.09,-46.96,2.16,"Peacock"],
+[17.56,-37.10,1.63,"Shaula"],[4.97,33.17,2.00,"Menkib"],[10.89,61.75,2.33,"Merak"],
+[2.53,89.26,2.02,"Polaris"],[11.06,56.38,2.44,"Phecda"],[13.79,49.31,2.23,"Alkaid"],
+[12.90,55.96,2.37,"Mizar"],[6.62,16.51,2.97,"Alhena"],[6.37,22.51,1.93,"Tejat"],
+[18.10,9.56,2.43,"Tarazed"],[21.22,30.23,2.14,"Sadr"],[20.37,40.26,2.46,"Gienah"],
+[7.03,-23.83,2.45,null],[12.79,-59.69,2.78,null],[5.59,-5.91,2.77,null],
+[8.74,-54.71,2.45,null],[0.14,29.09,2.06,"Alpheratz"],[3.08,40.96,2.10,"Mirfak"],
+[23.06,15.21,2.49,"Markab"],[10.33,19.84,2.61,"Zosma"],[21.47,5.57,2.72,"Sualocin"],
+[15.58,-26.11,2.89,"Graffias"],[16.24,-3.69,2.76,"Yed Prior"],[9.46,-65.07,2.25,null],
+[17.15,-15.72,2.43,"Sabik"],[16.83,-38.05,2.29,"Sargas"],[5.11,28.61,2.97,"Tianguan"],
+[1.91,20.81,2.11,"Hamal"],[0.94,-57.83,2.84,"Ankaa"],[4.51,-34.47,2.79,"Cursa"],
+[18.35,-36.76,2.60,"Kaus Australis"],[4.00,-51.49,2.83,null],[22.72,-46.88,2.26,null],
+[12.52,-16.52,2.68,"Algorab"],[7.87,28.03,2.88,"Castor B"],[16.36,61.51,2.79,null],
+[2.07,23.46,2.65,"Sheratan"],[20.19,67.66,2.28,null],[14.32,38.31,2.68,null],
+[6.06,-52.68,2.65,null],[22.16,-60.26,2.84,null],[21.44,-16.66,2.91,null],
+[5.22,-8.20,2.77,null],[9.08,-43.43,2.95,null],[17.94,51.49,2.23,null],
+[1.16,-10.18,2.04,"Diphda"],[14.85,74.16,2.49,null],[2.83,27.26,2.85,null],
+[20.63,47.71,3.21,null],[5.42,6.35,3.18,null],[6.53,-43.00,3.02,null],
+[23.66,-77.39,3.25,null],[22.69,10.83,3.41,null],[8.46,60.72,3.45,null],
+[4.91,33.17,3.03,null],[18.92,38.78,3.24,null],[20.37,18.54,3.27,null],
+[4.00,12.49,3.53,null],[23.46,43.93,3.35,null],[17.17,-34.29,3.21,null],
+[3.31,-12.93,3.01,null],[11.50,53.69,3.14,null],[9.22,-69.72,3.60,null],
+[19.51,27.96,3.04,null],[5.78,32.19,3.03,null],[6.76,-50.61,3.25,null],
+[0.26,59.15,2.27,null],[13.66,53.69,3.65,null],[4.76,22.96,2.87,null],
+[19.09,13.86,3.27,null],[6.90,12.90,3.18,null],[17.71,-37.04,3.32,null],
+[22.03,-29.88,3.27,null],[1.73,-25.02,3.46,null],[8.60,5.70,3.53,null],
+[21.74,-16.13,3.77,null],[18.75,33.36,3.45,null],[20.44,-56.73,3.97,null],
+[17.01,-15.40,3.48,null],[15.72,-26.11,3.85,null],[10.13,-70.04,3.97,null],
+[3.76,47.79,3.56,null],[21.52,40.44,3.94,null],[6.28,22.51,3.78,null],
+[5.59,9.93,3.97,null],[0.43,-77.25,4.02,null],[17.30,86.59,4.30,null],
+[11.24,-54.49,4.11,null],[6.83,-50.48,4.05,null],[9.77,26.01,3.52,null],
+[22.96,-78.00,4.35,null],[19.92,11.24,3.90,null],[3.96,53.50,3.97,null],
+[15.21,-9.38,3.87,null],[8.92,-52.70,4.22,null],[18.30,72.73,4.53,null],
+[6.55,16.00,4.16,null],[5.47,-34.07,4.27,null],[2.66,55.90,4.01,null],
+[12.17,-22.62,4.32,null],[22.17,-7.78,4.11,null],[14.77,-5.99,3.59,null]
+];
+
+// ---- Constellation lines: pairs of star indices ----
+var CONSTELLATIONS = [
+  {name:"Orion", lines:[[5,8],[8,43],[43,42],[5,11],[11,42],[8,5]]},
+  {name:"Ursa Major", lines:[[28,30],[30,32],[32,33],[33,31],[31,29],[29,28]]},
+  {name:"Cassiopeia", lines:[[26,25],[25,24],[24,43],[43,44]]},
+  {name:"Scorpius", lines:[[12,55],[55,56],[56,16],[16,12]]},
+  {name:"Leo", lines:[[17,37],[37,38],[38,17]]},
+  {name:"Gemini", lines:[[14,19],[19,18],[18,14]]},
+  {name:"Taurus", lines:[[11,22],[22,23],[23,11]]},
+  {name:"Aquila", lines:[[10,36],[36,37],[37,10]]},
+  {name:"Cygnus", lines:[[16,38],[38,39],[39,16],[40,38]]},
+  {name:"Perseus", lines:[[44,45],[45,46],[46,44]]},
+  {name:"Virgo", lines:[[13,58],[58,59],[59,13]]},
+  {name:"Crux", lines:[[20,60],[60,61],[61,20]]}
+];
+
+// ---- Style presets ----
+var STYLES = {
+  night:  {bg:'#0d1b2a', starColor:'#ffffff', lineColor:'#4a7fa5', accent:'#c8a84b', grad:true},
+  cosmos: {bg:'#1a0a2e', starColor:'#fff8f0', lineColor:'#9060d0', accent:'#e8c060', grad:true},
+  dawn:   {bg:'#1a0805', starColor:'#ffe8c0', lineColor:'#c04030', accent:'#f0c840', grad:true},
+  minimal:{bg:'#111111', starColor:'#ffffff', lineColor:'#555555', accent:'#999999', grad:false}
+};
+
+var canvas = document.getElementById('star-canvas');
+var ctx = canvas.getContext('2d');
+var W = canvas.width, H = canvas.height;
+var CX = W/2, CY = H/2, R = W*0.42;
+
+var currentStyle = STYLES.night;
+var currentFrame = 'circle';
+var currentLat = 31.23, currentLon = 121.47;
+var currentLocName = 'Shanghai';
+var currentDate = null;
+var rendered = false;
+
+// Set default date to today
+(function(){
+  var d = new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  document.getElementById('inp-date').value = y+'-'+m+'-'+dd;
+})();
+
+// ---- Astronomy ----
+function julianDate(year, month, day, hour) {
+  if (month <= 2) { year--; month += 12; }
+  var A = Math.floor(year/100);
+  var B = 2 - A + Math.floor(A/4);
+  return Math.floor(365.25*(year+4716)) + Math.floor(30.6001*(month+1)) + day + hour/24 + B - 1524.5;
+}
+
+function localSiderealTime(jd, lon) {
+  var T = (jd - 2451545.0) / 36525;
+  var GMST = 280.46061837 + 360.98564736629*(jd-2451545) + 0.000387933*T*T;
+  return ((GMST + lon) % 360 + 360) % 360;
+}
+
+function toHorizontal(ra_h, dec_d, lst, lat_d) {
+  var H = (lst - ra_h*15 + 360) % 360;
+  var Hr = H*Math.PI/180, dr = dec_d*Math.PI/180, lr = lat_d*Math.PI/180;
+  var sa = Math.sin(dr)*Math.sin(lr) + Math.cos(dr)*Math.cos(lr)*Math.cos(Hr);
+  sa = Math.max(-1, Math.min(1, sa));
+  var alt = Math.asin(sa);
+  var ca = (Math.sin(dr) - Math.sin(alt)*Math.sin(lr)) / (Math.cos(alt)*Math.cos(lr));
+  ca = Math.max(-1, Math.min(1, ca));
+  var az = Math.acos(ca);
+  if (Math.sin(Hr) > 0) az = 2*Math.PI - az;
+  return {alt: alt*180/Math.PI, az: az*180/Math.PI};
+}
+
+function projectStar(alt, az) {
+  if (alt < 0) return null;
+  var r = R * (1 - alt/90);
+  var theta = az * Math.PI/180;
+  return {x: CX + r*Math.sin(theta), y: CY - r*Math.cos(theta)};
+}
+
+// ---- Draw ----
+function drawMap() {
+  var dateVal = document.getElementById('inp-date').value;
+  var timeVal = document.getElementById('inp-time').value || '21:00';
+  if (!dateVal) return;
+
+  var parts = dateVal.split('-');
+  var year = parseInt(parts[0]), month = parseInt(parts[1]), day = parseInt(parts[2]);
+  var timeParts = timeVal.split(':');
+  var hour = parseInt(timeParts[0]) + parseInt(timeParts[1]||0)/60;
+
+  var jd = julianDate(year, month, day, hour - currentLon/15);
+  var lst = localSiderealTime(jd, currentLon);
+  var lat = currentLat;
+
+  var bg = document.getElementById('col-bg').value || currentStyle.bg;
+  var frameCol = document.getElementById('col-frame').value || currentStyle.accent;
+  var showNames = document.getElementById('tog-names').checked;
+  var showLines = document.getElementById('tog-lines').checked;
+  var showCNames = document.getElementById('tog-cnames').checked;
+  var showGrid = document.getElementById('tog-grid').checked;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Background
+  if (currentStyle.grad) {
+    var gr = ctx.createRadialGradient(CX,CY,0,CX,CY,R*1.2);
+    gr.addColorStop(0, lightenHex(bg, 20));
+    gr.addColorStop(1, bg);
+    ctx.fillStyle = gr;
+  } else {
+    ctx.fillStyle = bg;
+  }
+  ctx.fillRect(0,0,W,H);
+
+  // Clip to circle for frame=circle
+  if (currentFrame === 'circle') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(CX,CY,R,0,Math.PI*2);
+    ctx.clip();
+  }
+
+  // Grid circles
+  if (showGrid) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.7;
+    [30,60].forEach(function(alt){
+      var r = R*(1-alt/90);
+      ctx.beginPath();ctx.arc(CX,CY,r,0,Math.PI*2);ctx.stroke();
+    });
+    // Cardinal labels
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = '300 10px Outfit';
+    ctx.textAlign = 'center';
+    ctx.fillText('N', CX, CY-R-6);
+    ctx.fillText('S', CX, CY+R+14);
+    ctx.fillText('E', CX+R+6, CY+4);
+    ctx.fillText('W', CX-R-6, CY+4);
+  }
+
+  // Horizon ring
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();ctx.arc(CX,CY,R,0,Math.PI*2);ctx.stroke();
+
+  // Pre-compute star positions
+  var starPos = STARS.map(function(s){
+    var h = toHorizontal(s[0],s[1],lst,lat);
+    return h.alt >= 0 ? projectStar(h.alt, h.az) : null;
+  });
+
+  // Constellation lines
+  if (showLines) {
+    ctx.strokeStyle = currentStyle.lineColor;
+    ctx.globalAlpha = 0.35;
+    ctx.lineWidth = 0.7;
+    CONSTELLATIONS.forEach(function(con){
+      con.lines.forEach(function(pair){
+        var p1 = starPos[pair[0]], p2 = starPos[pair[1]];
+        if (p1 && p2) {
+          ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+        }
+      });
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // Stars
+  STARS.forEach(function(s, i){
+    var pos = starPos[i];
+    if (!pos) return;
+    var mag = s[2];
+    var radius = Math.max(0.5, Math.min(3.5, (4.5-mag)*0.7));
+    var isNamedBright = s[3] && mag < 1.5;
+
+    if (mag < 1) {
+      // Glow for very bright stars
+      var glow = ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,radius*4);
+      glow.addColorStop(0, currentStyle.starColor);
+      glow.addColorStop(0.3, currentStyle.starColor+'88');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.beginPath();ctx.arc(pos.x,pos.y,radius*4,0,Math.PI*2);ctx.fill();
+    }
+
+    ctx.fillStyle = mag < 1 ? '#ffffd0' : currentStyle.starColor;
+    ctx.globalAlpha = Math.max(0.4, Math.min(1, 1-(mag-1)*0.12));
+    ctx.beginPath();ctx.arc(pos.x,pos.y,radius,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Star name
+    if (showNames && isNamedBright) {
+      ctx.fillStyle = 'rgba(255,255,255,0.65)';
+      ctx.font = '300 8px Outfit';
+      ctx.textAlign = 'left';
+      ctx.fillText(s[3], pos.x+radius+3, pos.y+3);
+    }
+  });
+
+  // Constellation names
+  if (showCNames) {
+    CONSTELLATIONS.forEach(function(con){
+      var xs=[], ys=[];
+      con.lines.forEach(function(pair){
+        [pair[0],pair[1]].forEach(function(idx){
+          var p=starPos[idx];
+          if(p){xs.push(p.x);ys.push(p.y);}
+        });
+      });
+      if (xs.length) {
+        var mx=xs.reduce(function(a,b){return a+b},0)/xs.length;
+        var my=ys.reduce(function(a,b){return a+b},0)/ys.length;
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.font = 'italic 300 9px Outfit';
+        ctx.textAlign = 'center';
+        ctx.fillText(con.name, mx, my);
+      }
+    });
+  }
+
+  if (currentFrame === 'circle') ctx.restore();
+
+  // Frame
+  if (currentFrame === 'circle') {
+    ctx.strokeStyle = frameCol;
+    ctx.lineWidth = 2;
+    ctx.beginPath();ctx.arc(CX,CY,R+1,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();ctx.arc(CX,CY,R+4,0,Math.PI*2);ctx.stroke();
+  }
+
+  // Bottom annotation
+  var dateStr = new Date(year,month-1,day).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '300 10px Outfit';
+  ctx.textAlign = 'center';
+  ctx.fillText(dateStr, CX, H-26);
+  ctx.fillStyle = 'rgba(255,255,255,0.28)';
+  ctx.font = '300 9px Outfit';
+  ctx.fillText(currentLocName + '  ' + currentLat.toFixed(2) + '° N  ' + currentLon.toFixed(2) + '° E', CX, H-14);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('Star It', W-12, H-6);
+
+  if (currentFrame === 'polaroid') {
+    var tmp = canvas.toDataURL();
+    var img2 = new Image();
+    img2.onload = function(){
+      ctx.clearRect(0,0,W,H);
+      var padX=30, padT=20, padB=70;
+      ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+      ctx.drawImage(img2,padX,padT,W-padX*2,H-padT-padB);
+      ctx.fillStyle='#333';ctx.font='italic 400 14px Outfit';ctx.textAlign='center';
+      ctx.fillText(dateStr, CX, H-padB+26);
+      ctx.fillStyle='#888';ctx.font='300 10px Outfit';
+      ctx.fillText(currentLocName, CX, H-padB+42);
+    };
+    img2.src=tmp;
+  } else if (currentFrame === 'label') {
+    ctx.fillStyle = frameCol+'cc';
+    ctx.fillRect(0,H-48,W,48);
+    ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='italic 400 13px Outfit';ctx.textAlign='left';
+    ctx.fillText(dateStr,14,H-28);
+    ctx.font='300 9px Outfit';ctx.fillStyle='rgba(255,255,255,.6)';
+    ctx.fillText(currentLocName,14,H-14);
+    ctx.textAlign='right';ctx.fillStyle='rgba(255,255,255,.4)';
+    ctx.fillText('Star It',W-14,H-18);
+  }
+
+  rendered = true;
+}
+
+// ---- Lighten hex ----
+function lightenHex(hex, amt) {
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  r=Math.min(255,r+amt);g=Math.min(255,g+amt);b=Math.min(255,b+amt);
+  return '#'+r.toString(16).padStart(2,'0')+g.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0');
+}
+
+// ---- Nominatim location search ----
+var searchTimer = null;
+document.getElementById('inp-loc').addEventListener('input', function(){
+  clearTimeout(searchTimer);
+  var v = this.value.trim();
+  if (v.length < 2) { document.getElementById('search-results').style.display='none'; return; }
+  searchTimer = setTimeout(function(){
+    fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(v)+'&format=json&limit=4')
+      .then(function(r){return r.json();})
+      .then(function(results){
+        var el = document.getElementById('search-results');
+        el.innerHTML='';
+        if (!results.length){el.style.display='none';return;}
+        results.forEach(function(r){
+          var div=document.createElement('div');div.className='sr-item';
+          div.textContent=r.display_name.split(',').slice(0,3).join(', ');
+          div.addEventListener('click',function(){
+            currentLat=parseFloat(r.lat);currentLon=parseFloat(r.lon);
+            currentLocName=r.display_name.split(',')[0];
+            document.getElementById('inp-loc').value=currentLocName;
+            document.getElementById('disp-lat').textContent=currentLat.toFixed(2);
+            document.getElementById('disp-lon').textContent=currentLon.toFixed(2);
+            el.style.display='none';
+          });
+          el.appendChild(div);
+        });
+        el.style.display='block';
+      }).catch(function(){});
+  }, 400);
+});
+
+// ---- UI events ----
+document.getElementById('btn-generate').addEventListener('click', function(){
+  document.getElementById('status').textContent='Rendering…';
+  setTimeout(function(){drawMap();document.getElementById('status').textContent='';},10);
+});
+
+document.querySelectorAll('#style-group .btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#style-group .btn').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    currentStyle=STYLES[this.dataset.s];
+    document.getElementById('col-bg').value=currentStyle.bg;
+    if(rendered)drawMap();
+  });
+});
+document.querySelectorAll('#frame-group .btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#frame-group .btn').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    currentFrame=this.dataset.f;
+    if(rendered)drawMap();
+  });
+});
+['col-bg','col-frame'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(){if(rendered)drawMap();});
+});
+['tog-names','tog-lines','tog-cnames','tog-grid'].forEach(function(id){
+  document.getElementById(id).addEventListener('change',function(){if(rendered)drawMap();});
+});
+
+function doExport(){
+  var a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='starit.png';a.click();
+}
+document.getElementById('btn-export').addEventListener('click',doExport);
+document.getElementById('btn-export2').addEventListener('click',doExport);
+document.getElementById('btn-about').addEventListener('click',function(){
+  alert('Star It\n\nEnter any date and location to see the night sky exactly as it appeared — ideal for birthdays, anniversaries, or special moments.');
+});
+
+// Initial render with default location (Shanghai)
+setTimeout(drawMap, 100);
+</script>
+</body>
+</html>
