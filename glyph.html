@@ -783,7 +783,16 @@ function animatePoster(ch, data, etymInfo) {
     // skipRate=1: full density (sampleSize already capped at 512, so max ~512*512*keepRate dots)
     var skipRate = 1;
     var blurAmt2=(1-focus2)*sl2.size*0.18;
-    var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
+    // Color ink: per-stroke hue from palette if toggle is on
+    var useColor2 = document.getElementById('tog-color') && document.getElementById('tog-color').checked;
+    var sc2pal = SCHEMES[currentScheme].palette || [];
+    var ip2base = ip2.dark;
+    if (useColor2 && sc2pal.length) {
+      var ci2 = (seed2 + si2*7919) % sc2pal.length;
+      var hex2 = sc2pal[ci2].replace('#','');
+      ip2base = [parseInt(hex2.slice(0,2),16), parseInt(hex2.slice(2,4),16), parseInt(hex2.slice(4,6),16)];
+    }
+    var ip2r=ip2base[0], ip2g=ip2base[1], ip2b=ip2base[2];
     // Hero gets higher keep rate for denser dots
     var keepR2 = isHero2 ? (0.5 + focus2*0.45) : (0.2 + focus2*0.55);
     var ox2=sl2.cx-sl2.size/2, oy2=sl2.cy-sl2.size/2;
