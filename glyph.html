@@ -293,23 +293,13 @@ function sampleStroke(strokePath, size) {
   ofx.restore();
   var imgData = ofx.getImageData(0, 0, size, size);
   var pts = [];
-  for (var py = 0; py < size; py += 2) {
-    for (var px = 0; px < size; px += 2) {
+  for (var py = 0; py < size; py++) {
+    for (var px = 0; px < size; px++) {
       var idx = (py * size + px) * 4;
-      if (imgData.data[idx + 3] > 128 && Math.random() < 0.25) {
+      if (imgData.data[idx + 3] > 80) {
         pts.push([px, py]);
       }
     }
-  }
-  // Cap at 800 dots
-  if (pts.length > 800) {
-    var out = [];
-    for (var di = 0; di < 800; di++) {
-      var ri = Math.floor(Math.random() * pts.length);
-      out.push(pts[ri]);
-      pts.splice(ri, 1);
-    }
-    pts = out;
   }
   return pts;
 }
@@ -374,9 +364,9 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   // Pre-compute layout (no rotation, variable scale, can bleed off edges)
   var layout = [];
   for (var li = 0; li < strokes.length; li++) {
-    var lcx = -40 + sr() * (W + 80);
-    var lcy = -40 + sr() * (H + 80);
-    var lsz = 80 + sr() * 200;     // 80px to 280px
+    var lcx = W*0.1 + sr() * W*0.8;
+    var lcy = H*0.05 + sr() * H*0.9;
+    var lsz = 150 + sr() * 280;     // 80px to 280px
     var ldepth = sr();              // 0..1 for color
     layout.push({ cx: lcx, cy: lcy, size: Math.round(lsz), depth: ldepth });
   }
@@ -392,7 +382,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       var oy = sl.cy - sl.size / 2;
       ctx.fillStyle = dotColor;
       for (var di = 0; di < pts.length; di++) {
-        var r = 0.8 + Math.random() * 1.8;
+        var r = 0.3 + Math.random() * 0.5;
         var a = (0.35 + Math.random() * 0.55) * alphaScale;
         ctx.globalAlpha = a;
         ctx.beginPath();
@@ -463,9 +453,9 @@ function animatePoster(ch, data, etymInfo) {
   var W = 520, H = 680;
   var preLayout = [];
   for (var li2 = 0; li2 < total; li2++) {
-    var cx2 = -40 + sr2() * (W + 80);
-    var cy2 = -40 + sr2() * (H + 80);
-    var sz2 = Math.round(80 + sr2() * 200);
+    var cx2 = W*0.1 + sr2() * W*0.8;
+    var cy2 = H*0.05 + sr2() * H*0.9;
+    var sz2 = Math.round(150 + sr2() * 280);
     var dep2 = sr2();
     preLayout.push({ cx: cx2, cy: cy2, size: sz2, depth: dep2 });
   }
@@ -498,7 +488,7 @@ function animatePoster(ch, data, etymInfo) {
     var oy = sl.cy - sl.size / 2;
     ctx.fillStyle = dotColor;
     for (var di = 0; di < pts.length; di++) {
-      var r = 0.8 + Math.random() * 1.8;
+      var r = 0.3 + Math.random() * 0.5;
       var a = (0.35 + Math.random() * 0.55) * alphaScale;
       ctx.globalAlpha = a;
       ctx.beginPath();
