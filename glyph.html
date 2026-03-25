@@ -490,75 +490,6 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   }
   ctx.restore();
 
-  // ── Flow lines — 国画山水横向粒子流线 ──────────────────────────────────────
-  if (document.getElementById('tog-fog') && document.getElementById('tog-fog').checked) {
-    var fogSeed = ch.codePointAt(0) * 999983;
-    function fg() { fogSeed=(fogSeed*1664525+1013904223)&0x7fffffff; return fogSeed/0x7fffffff; }
-    var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
-
-    ctx.save();
-    var nLines = 7 + Math.floor(fg()*6);
-    for (var li=0; li<nLines; li++) {
-      // Each line: a bezier path sampled into particles
-      var baseY = 30 + fg()*(H-86);
-      var nSeg = 4 + Math.floor(fg()*3);
-      var segW = (W+40) / nSeg;
-
-      // Build smooth catmull-rom style control points
-      // Key: control points inherit velocity from previous segment — no sharp corners
-      var pts = [{x:-20, y:baseY}];
-      var cy_cur = baseY;
-      var vy = (fg()-0.5)*30; // initial vertical velocity
-      for (var si3=0; si3<nSeg; si3++) {
-        var x0 = -20 + si3*segW;
-        // Velocity drifts gently — no abrupt direction change
-        vy += (fg()-0.5)*20;
-        vy *= 0.7; // dampen: tends back toward horizontal
-        var endY = cy_cur + vy;
-        // Control points follow the flow direction — smooth tangent continuity
-        pts.push({
-          cp1x: x0+segW*0.33, cp1y: cy_cur + vy*0.33,
-          cp2x: x0+segW*0.66, cp2y: endY - vy*0.33,
-          x: x0+segW, y: endY
-        });
-        cy_cur = endY;
-      }
-
-      // Sample points along bezier path and draw tiny particles
-      var totalPts = 400 + Math.floor(fg()*150); // very dense
-      var lineAlpha = 0.15 + fg()*0.15;           // clearly visible
-      var dotR = 0.3 + fg()*0.6;
-
-      for (var pi2=0; pi2<totalPts; pi2++) {
-        var tGlobal = pi2 / totalPts;
-        var segIdx = Math.floor(tGlobal * nSeg);
-        var tSeg = (tGlobal * nSeg) - segIdx;
-        if (segIdx >= pts.length-1) segIdx = pts.length-2;
-
-        var p0 = pts[segIdx], p1 = pts[segIdx+1];
-        var mt = 1-tSeg;
-        var bx = mt*mt*mt*p0.x + 3*mt*mt*tSeg*p1.cp1x + 3*mt*tSeg*tSeg*p1.cp2x + tSeg*tSeg*tSeg*p1.x;
-        var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
-
-        var edgeFade = Math.sin(tGlobal * Math.PI);
-        // Wider scatter with gaussian-like falloff — dense core, soft diffuse edge
-        var sc1 = (fg()-0.5)*3;   // tight core
-        var sc2 = (fg()-0.5)*10;  // occasional outlier
-        var scatter = sc1 + (fg()>0.75 ? sc2 : 0);
-        var pAlpha = lineAlpha * edgeFade * (0.45 + fg()*0.55);
-        var pr = dotR * (0.4 + fg()*1.0);
-
-        ctx.globalAlpha = pAlpha;
-        ctx.fillStyle = 'rgb('+fogR+','+fogG+','+fogB+')';
-        ctx.beginPath();
-        ctx.arc(bx + (fg()-0.5)*2, by + scatter, pr, 0, Math.PI*2);
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
   // ── Seeded random for stable stroke layout ──────────────────────────────────
   var seed = ch.codePointAt(0);
   function sr() { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; }
@@ -631,6 +562,75 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(ch, W / 2, H / 2);
+    ctx.restore();
+  }
+
+  // ── Flow lines — 国画山水横向粒子流线 ──────────────────────────────────────
+  if (document.getElementById('tog-fog') && document.getElementById('tog-fog').checked) {
+    var fogSeed = ch.codePointAt(0) * 999983;
+    function fg() { fogSeed=(fogSeed*1664525+1013904223)&0x7fffffff; return fogSeed/0x7fffffff; }
+    var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
+
+    ctx.save();
+    var nLines = 7 + Math.floor(fg()*6);
+    for (var li=0; li<nLines; li++) {
+      // Each line: a bezier path sampled into particles
+      var baseY = 30 + fg()*(H-86);
+      var nSeg = 4 + Math.floor(fg()*3);
+      var segW = (W+40) / nSeg;
+
+      // Build smooth catmull-rom style control points
+      // Key: control points inherit velocity from previous segment — no sharp corners
+      var pts = [{x:-20, y:baseY}];
+      var cy_cur = baseY;
+      var vy = (fg()-0.5)*30; // initial vertical velocity
+      for (var si3=0; si3<nSeg; si3++) {
+        var x0 = -20 + si3*segW;
+        // Velocity drifts gently — no abrupt direction change
+        vy += (fg()-0.5)*20;
+        vy *= 0.7; // dampen: tends back toward horizontal
+        var endY = cy_cur + vy;
+        // Control points follow the flow direction — smooth tangent continuity
+        pts.push({
+          cp1x: x0+segW*0.33, cp1y: cy_cur + vy*0.33,
+          cp2x: x0+segW*0.66, cp2y: endY - vy*0.33,
+          x: x0+segW, y: endY
+        });
+        cy_cur = endY;
+      }
+
+      // Sample points along bezier path and draw tiny particles
+      var totalPts = 400 + Math.floor(fg()*150); // very dense
+      var lineAlpha = 0.15 + fg()*0.15;           // clearly visible
+      var dotR = 0.3 + fg()*0.6;
+
+      for (var pi2=0; pi2<totalPts; pi2++) {
+        var tGlobal = pi2 / totalPts;
+        var segIdx = Math.floor(tGlobal * nSeg);
+        var tSeg = (tGlobal * nSeg) - segIdx;
+        if (segIdx >= pts.length-1) segIdx = pts.length-2;
+
+        var p0 = pts[segIdx], p1 = pts[segIdx+1];
+        var mt = 1-tSeg;
+        var bx = mt*mt*mt*p0.x + 3*mt*mt*tSeg*p1.cp1x + 3*mt*tSeg*tSeg*p1.cp2x + tSeg*tSeg*tSeg*p1.x;
+        var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
+
+        var edgeFade = Math.sin(tGlobal * Math.PI);
+        // Wider scatter with gaussian-like falloff — dense core, soft diffuse edge
+        var sc1 = (fg()-0.5)*3;   // tight core
+        var sc2 = (fg()-0.5)*10;  // occasional outlier
+        var scatter = sc1 + (fg()>0.75 ? sc2 : 0);
+        var pAlpha = lineAlpha * edgeFade * (0.45 + fg()*0.55);
+        var pr = dotR * (0.4 + fg()*1.0);
+
+        ctx.globalAlpha = pAlpha;
+        ctx.fillStyle = 'rgb('+fogR+','+fogG+','+fogB+')';
+        ctx.beginPath();
+        ctx.arc(bx + (fg()-0.5)*2, by + scatter, pr, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
