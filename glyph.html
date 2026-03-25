@@ -279,329 +279,160 @@ function fetchGlyph(ch, callback) {
     });
 }
 
-// ── Draw poster ───────────────────────────────────────────────────────────────
-function drawPoster(ch, data, etymInfo) {
+// ── Draw poster — floating strokes, ink scatter, rice paper ──────────────────
+function drawPoster(ch, data, etymInfo, _strokeLimit) {
   if (animTimer) { clearTimeout(animTimer); animTimer = null; }
   var sc = SCHEMES[currentScheme];
   var W = 520, H = 680;
   ctx.clearRect(0, 0, W, H);
 
-  // Background
+  // ── Scheme-aware ink color system ──────────────────────────────────────────
+  // Each scheme defines: inkDark (t=1), inkLight (t=0)
+  var inkPalettes = {
+    parchment: { dark:[26,18,8],   light:[139,96,64]  },
+    ink:       { dark:[240,192,96], light:[200,148,26] },
+    night:     { dark:[224,240,255], light:[160,200,255] },
+    minimal:   { dark:[0,0,0],      light:[153,153,153] }
+  };
+  var ip = inkPalettes[currentScheme] || inkPalettes.parchment;
+
+  function inkColor(t) {
+    // t: 0.0 = lightest, 1.0 = darkest
+    var r = Math.round(ip.light[0] + (ip.dark[0] - ip.light[0]) * t);
+    var g = Math.round(ip.light[1] + (ip.dark[1] - ip.light[1]) * t);
+    var b = Math.round(ip.light[2] + (ip.dark[2] - ip.light[2]) * t);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  // ── Background ─────────────────────────────────────────────────────────────
   ctx.fillStyle = sc.bg;
   ctx.fillRect(0, 0, W, H);
 
-  // Paper grain (LCG noise dots)
-  var lcgState = 12345;
-  function lcgRand() { lcgState = (lcgState * 1664525 + 1013904223) & 0xffffffff; return (lcgState >>> 0) / 0xffffffff; }
+  // Paper grain: 800 LCG dots
+  var grainSeed = 99991;
+  function gr() { grainSeed = (grainSeed * 1664525 + 1013904223) & 0x7fffffff; return grainSeed / 0x7fffffff; }
   ctx.save();
-  for (var i = 0; i < 3500; i++) {
-    var px = lcgRand() * W;
-    var py = lcgRand() * H;
-    var alpha = lcgRand() * 0.04 + 0.01;
-    ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
-    ctx.fillRect(px, py, 1, 1);
+  for (var gi = 0; gi < 800; gi++) {
+    var gx = gr() * W;
+    var gy = gr() * H;
+    var ga = 0.02 + gr() * 0.04;
+    ctx.fillStyle = 'rgba(80,50,20,' + ga + ')';
+    ctx.fillRect(gx, gy, 1, 1);
   }
   ctx.restore();
 
-  // Horizontal ruled lines
+  // Very faint warm horizontal lines
   ctx.save();
-  ctx.strokeStyle = sc.ruled;
+  ctx.strokeStyle = 'rgba(120,80,40,0.04)';
   ctx.lineWidth = 0.5;
-  for (var y = 20; y < H; y += 18) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  for (var hl = 0; hl < H; hl += 28) {
+    ctx.beginPath(); ctx.moveTo(0, hl); ctx.lineTo(W, hl); ctx.stroke();
   }
   ctx.restore();
 
-  // Watermark "GLYPH"
-  ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.rotate(-Math.PI / 4);
-  ctx.font = 'bold 96px Outfit, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = sc.watermark;
-  ctx.fillText('GLYPH', 0, 0);
-  ctx.restore();
+  // ── Seeded random for stroke layout ────────────────────────────────────────
+  var seed = ch.codePointAt(0);
+  function sr() { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; }
 
-  // L-bracket corner ornaments
-  var cLen = 18, cGap = 10, cW = 1.5;
-  ctx.save();
-  ctx.strokeStyle = sc.muted;
-  ctx.lineWidth = cW;
-  ctx.globalAlpha = 0.4;
-  // Top-left
-  ctx.beginPath(); ctx.moveTo(cGap + cLen, cGap); ctx.lineTo(cGap, cGap); ctx.lineTo(cGap, cGap + cLen); ctx.stroke();
-  // Top-right
-  ctx.beginPath(); ctx.moveTo(W - cGap - cLen, cGap); ctx.lineTo(W - cGap, cGap); ctx.lineTo(W - cGap, cGap + cLen); ctx.stroke();
-  // Bottom-left
-  ctx.beginPath(); ctx.moveTo(cGap + cLen, H - cGap); ctx.lineTo(cGap, H - cGap); ctx.lineTo(cGap, H - cGap - cLen); ctx.stroke();
-  // Bottom-right
-  ctx.beginPath(); ctx.moveTo(W - cGap - cLen, H - cGap); ctx.lineTo(W - cGap, H - cGap); ctx.lineTo(W - cGap, H - cGap - cLen); ctx.stroke();
-  ctx.restore();
+  var strokes = (data && data.strokes) ? data.strokes : [];
+  var strokeLimit = (_strokeLimit !== undefined) ? _strokeLimit : strokes.length;
 
-  // Main character (strokes or fallback)
-  var charSize = 200;
-  var charCX = W / 2, charCY = 155;
+  // Pre-compute layout for all strokes (so bleed pass uses same positions)
+  var layout = [];
+  for (var li = 0; li < strokes.length; li++) {
+    var lpx = 80 + sr() * 360;
+    var lpy = 60 + sr() * 560;
+    var lang = (sr() - 0.5) * 60 * Math.PI / 180;
+    var lsz = 60 + sr() * 120;
+    var ldepth = sr();  // 0..1, used for both alpha and color
+    layout.push({ px: lpx, py: lpy, angle: lang, size: lsz, depth: ldepth });
+  }
 
-  var showStrokeOrder = document.getElementById('tog-strokes').checked;
-  var showEtym = document.getElementById('tog-etym').checked;
+  if (strokes.length > 0) {
+    // ── Ink bleed pass (subtle shadow behind each stroke) ───────────────────
+    for (var bi = 0; bi < strokeLimit; bi++) {
+      var bl = layout[bi];
+      ctx.save();
+      ctx.translate(bl.px + 1, bl.py + 2);
+      ctx.rotate(bl.angle);
+      ctx.scale(bl.size / 1024, -bl.size / 1024);
+      ctx.translate(-512, -512);
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = inkColor(1.0);
+      try { ctx.fill(new Path2D(strokes[bi])); } catch(e) {}
+      ctx.restore();
+    }
 
-  if (data && data.strokes && data.strokes.length > 0) {
-    renderStrokes(ctx, data.strokes, charCX, charCY, charSize, sc.palette, null);
-
-    // Stroke count badge (top-right)
-    var badgeR = 18;
-    var bx = W - 36, by = 36;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(bx, by, badgeR, 0, Math.PI * 2);
-    ctx.fillStyle = sc.badge;
-    ctx.fill();
-    ctx.font = 'bold 14px Outfit, sans-serif';
-    ctx.fillStyle = sc.badgeText;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(data.strokes.length, bx, by);
-    ctx.restore();
-
-    // Small stroke order diagrams
-    if (showStrokeOrder) {
-      var smSize = 26, smCols = 8, smStartX = 36, smStartY = 30, smGap = 6;
-      var totalW = Math.min(data.strokes.length, smCols) * (smSize + smGap);
-      var offsetX = (W - totalW) / 2;
-      data.strokes.forEach(function(_, idx) {
-        var col = idx % smCols;
-        var row = Math.floor(idx / smCols);
-        var sx = offsetX + col * (smSize + smGap) + smSize / 2;
-        var sy = smStartY + row * (smSize + smGap + 10) + smSize / 2;
-        // Draw strokes up to this index faded, then current stroke solid
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(sx - smSize / 2 - 1, sy - smSize / 2 - 1, smSize + 2, smSize + 2);
-        ctx.clip();
-        renderStrokes(ctx, data.strokes.slice(0, idx), sx, sy, smSize, [sc.muted], [0.2]);
-        renderStrokes(ctx, [data.strokes[idx]], sx, sy, smSize, [sc.palette[idx % sc.palette.length]], [0.9]);
-        ctx.restore();
-        // Number
-        ctx.save();
-        ctx.font = '7px Outfit, sans-serif';
-        ctx.fillStyle = sc.muted;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(idx + 1, sx, sy + smSize / 2 + 1);
-        ctx.restore();
-      });
+    // ── Main stroke pass ────────────────────────────────────────────────────
+    for (var si = 0; si < strokeLimit; si++) {
+      var sl = layout[si];
+      var depth = sl.depth;
+      ctx.save();
+      ctx.translate(sl.px, sl.py);
+      ctx.rotate(sl.angle);
+      ctx.scale(sl.size / 1024, -sl.size / 1024);
+      ctx.translate(-512, -512);
+      ctx.fillStyle = inkColor(depth);
+      ctx.globalAlpha = 0.15 + depth * 0.75;
+      try { ctx.fill(new Path2D(strokes[si])); } catch(e) {}
+      ctx.restore();
     }
   } else {
-    // Fallback: draw character using canvas font
+    // Fallback: draw character with font when no stroke data
     ctx.save();
-    ctx.font = charSize + 'px "Noto Serif SC", serif';
-    ctx.fillStyle = sc.ink;
+    ctx.font = '220px "Noto Serif SC", serif';
+    ctx.fillStyle = inkColor(0.7);
+    ctx.globalAlpha = 0.18;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(ch, charCX, charCY);
+    ctx.fillText(ch, W / 2, H / 2);
     ctx.restore();
   }
 
-  // ── Info block (y: 290–420) ────────────────────────────────────────────────
-  if (etymInfo && showEtym) {
-    var infoY = 290;
+  // ── Minimal info overlay ────────────────────────────────────────────────────
+  // Bottom-left: ghost character
+  ctx.save();
+  ctx.font = '40px "Noto Serif SC", serif';
+  ctx.fillStyle = inkColor(1.0);
+  ctx.globalAlpha = 0.15;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(ch, 28, H - 48);
+  ctx.restore();
 
-    // Pinyin
-    ctx.save();
-    ctx.font = 'bold 28px Outfit, sans-serif';
-    ctx.fillStyle = sc.accent;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(etymInfo.pinyin, 40, infoY);
-    ctx.restore();
-
-    // Meaning
-    ctx.save();
-    ctx.font = '14px "Noto Serif SC", serif';
-    ctx.fillStyle = sc.ink;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.globalAlpha = 0.85;
-    ctx.fillText(etymInfo.meaning, 40, infoY + 36);
-    ctx.restore();
-
-    // Divider
-    ctx.save();
-    ctx.strokeStyle = sc.accent;
-    ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.moveTo(40, infoY + 60);
-    ctx.lineTo(W - 40, infoY + 60);
-    ctx.stroke();
-    ctx.restore();
-
-    // Oracle/script era badge
-    var eraText = etymInfo.oracle ? 'Oracle Bone Script  甲骨文' : 'Bronze / Seal Script  金文';
+  // Pinyin below character
+  if (etymInfo && etymInfo.pinyin) {
     ctx.save();
     ctx.font = '10px Outfit, sans-serif';
-    ctx.fillStyle = sc.muted;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.fillText(eraText, W - 40, infoY);
-    ctx.restore();
-
-    // Etymology text (wrapped)
-    ctx.save();
-    ctx.font = '12px "Noto Serif SC", serif';
-    ctx.fillStyle = sc.ink;
-    ctx.globalAlpha = 0.75;
-    wrapText(ctx, etymInfo.etymology, 40, infoY + 74, W - 80, 18);
-    ctx.restore();
-  } else if (!etymInfo && showEtym) {
-    // No entry: just show the character name
-    ctx.save();
-    ctx.font = 'bold 22px Outfit, sans-serif';
-    ctx.fillStyle = sc.accent;
+    ctx.fillStyle = inkColor(0.8);
+    ctx.globalAlpha = 0.4;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(ch, 40, 295);
-    ctx.font = '12px "Noto Serif SC", serif';
-    ctx.fillStyle = sc.muted;
-    ctx.textBaseline = 'top';
-    ctx.fillText('No etymology data in embedded dictionary.', 40, 330);
+    ctx.fillText(etymInfo.pinyin, 28, H - 38);
     ctx.restore();
   }
 
-  // ── Radical / decomposition (y: 430–540) ──────────────────────────────────
-  var decomp = IDS[ch];
-  if (decomp && decomp.length > 0) {
+  // Meaning
+  if (etymInfo && etymInfo.meaning) {
+    var shortMeaning = etymInfo.meaning.split(' / ')[1] || etymInfo.meaning;
     ctx.save();
-    ctx.font = '11px Outfit, sans-serif';
-    ctx.fillStyle = sc.muted;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Composition  由以下部件组成', 40, 434);
-    ctx.restore();
-
-    // Divider
-    ctx.save();
-    ctx.strokeStyle = sc.muted;
-    ctx.lineWidth = 0.5;
+    ctx.font = '9px Outfit, sans-serif';
+    ctx.fillStyle = inkColor(0.6);
     ctx.globalAlpha = 0.3;
-    ctx.beginPath();
-    ctx.moveTo(40, 452);
-    ctx.lineTo(W - 40, 452);
-    ctx.stroke();
-    ctx.restore();
-
-    // Component chars
-    var decompUniq = [];
-    var seen = {};
-    decomp.forEach(function(c) {
-      if (!seen[c]) { seen[c] = 0; }
-      seen[c]++;
-    });
-    Object.keys(seen).forEach(function(c) {
-      decompUniq.push({ ch: c, count: seen[c] });
-    });
-
-    var compX = 40, compY = 460;
-    var compSize = 40;
-    decompUniq.forEach(function(item, i) {
-      var cx = compX + i * (compSize + 32);
-      // Box
-      ctx.save();
-      ctx.strokeStyle = sc.accent;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.5;
-      ctx.strokeRect(cx, compY, compSize, compSize);
-      ctx.restore();
-      // Character
-      ctx.save();
-      ctx.font = compSize * 0.7 + 'px "Noto Serif SC", serif';
-      ctx.fillStyle = sc.ink;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(item.ch, cx + compSize / 2, compY + compSize / 2);
-      ctx.restore();
-      // Count
-      if (item.count > 1) {
-        ctx.save();
-        ctx.font = '10px Outfit, sans-serif';
-        ctx.fillStyle = sc.accent;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('x' + item.count, cx + compSize + 4, compY + compSize / 2 - 5);
-        ctx.restore();
-      }
-      // Etymology radical label
-      var compEtym = ETYM[item.ch];
-      if (compEtym) {
-        ctx.save();
-        ctx.font = '9px "Noto Serif SC", serif';
-        ctx.fillStyle = sc.muted;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(compEtym.meaning.split(' / ')[0], cx + compSize / 2, compY + compSize + 3);
-        ctx.restore();
-      }
-    });
-
-    // Caption
-    var caption = '由「' + decomp.join('」「') + '」组成';
-    ctx.save();
-    ctx.font = '11px "Noto Serif SC", serif';
-    ctx.fillStyle = sc.muted;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(caption, 40, compY + compSize + 20);
+    ctx.fillText(shortMeaning, 28, H - 26);
     ctx.restore();
   }
 
-  // ── Bottom strip (y: 610–655) ──────────────────────────────────────────────
+  // Bottom-right: "Glyph It" mark
   ctx.save();
-  ctx.strokeStyle = sc.muted;
-  ctx.lineWidth = 0.5;
-  ctx.globalAlpha = 0.3;
-  ctx.beginPath();
-  ctx.moveTo(40, 615);
-  ctx.lineTo(W - 40, 615);
-  ctx.stroke();
-  ctx.restore();
-
-  var codepoint = 'U+' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
-  ctx.save();
-  ctx.font = '11px Outfit, monospace';
-  ctx.fillStyle = sc.muted;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText(codepoint, 40, 622);
-  if (data && data.strokes) {
-    ctx.fillText(data.strokes.length + ' strokes', 120, 622);
-  } else if (etymInfo) {
-    ctx.fillText(etymInfo.strokes + ' strokes', 120, 622);
-  }
+  ctx.font = '8px Outfit, sans-serif';
+  ctx.fillStyle = inkColor(0.5);
+  ctx.globalAlpha = 0.2;
   ctx.textAlign = 'right';
-  ctx.fillStyle = sc.accent;
-  ctx.font = 'bold 11px Outfit, sans-serif';
-  ctx.fillText('Glyph It', W - 40, 622);
-  ctx.restore();
-}
-
-// ── Render strokes ────────────────────────────────────────────────────────────
-function renderStrokes(ctx, strokes, cx, cy, size, palette, alphas) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(size / 1024, -size / 1024);
-  ctx.translate(-512, -512);
-  strokes.forEach(function(pathStr, i) {
-    var color = palette[i % palette.length];
-    var alpha = alphas ? (alphas[i] !== undefined ? alphas[i] : alphas[0]) : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = color;
-    try {
-      ctx.fill(new Path2D(pathStr));
-    } catch(e) {}
-    ctx.restore();
-  });
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Glyph It', W - 20, H - 16);
   ctx.restore();
 }
 
@@ -611,24 +442,62 @@ function animatePoster(ch, data, etymInfo) {
     drawPoster(ch, data, etymInfo);
     return;
   }
-  var sc = SCHEMES[currentScheme];
-  var delay = 300;
   var total = data.strokes.length;
   var step = 0;
+  var fadeDuration = 400;
+  var stagger = 150;
 
-  function drawStep() {
-    // Draw background elements once
-    var fakeData = { strokes: data.strokes.slice(0, step + 1) };
-    drawPoster(ch, fakeData, etymInfo);
-    step++;
-    if (step < total) {
-      animTimer = setTimeout(drawStep, delay);
-    } else {
-      // Final draw with full data
-      drawPoster(ch, data, etymInfo);
+  function drawStep(revealed, alpha) {
+    drawPoster(ch, data, etymInfo, revealed);
+    // Overlay a fading-in stroke on top
+    if (revealed < total && alpha < 1) {
+      var sc = SCHEMES[currentScheme];
+      var ip2 = { parchment:[26,18,8], ink:[240,192,96], night:[224,240,255], minimal:[0,0,0] };
+      var dk = ip2[currentScheme] || ip2.parchment;
+      var seedCopy = ch.codePointAt(0);
+      function srCopy() { seedCopy = (seedCopy * 1664525 + 1013904223) & 0x7fffffff; return seedCopy / 0x7fffffff; }
+      // Advance rng to this stroke's layout
+      for (var ai = 0; ai < revealed; ai++) {
+        srCopy(); srCopy(); srCopy(); srCopy(); srCopy();
+      }
+      var apx = 80 + srCopy() * 360;
+      var apy = 60 + srCopy() * 560;
+      var aang = (srCopy() - 0.5) * 60 * Math.PI / 180;
+      var asz = 60 + srCopy() * 120;
+      var adepth = srCopy();
+      ctx.save();
+      ctx.translate(apx, apy);
+      ctx.rotate(aang);
+      ctx.scale(asz / 1024, -asz / 1024);
+      ctx.translate(-512, -512);
+      ctx.globalAlpha = alpha * (0.15 + adepth * 0.75);
+      ctx.fillStyle = 'rgb(' + dk[0] + ',' + dk[1] + ',' + dk[2] + ')';
+      try { ctx.fill(new Path2D(data.strokes[revealed])); } catch(e) {}
+      ctx.restore();
     }
   }
-  drawStep();
+
+  function runStroke(idx) {
+    if (idx >= total) {
+      drawPoster(ch, data, etymInfo);
+      return;
+    }
+    var startTime = null;
+    function fadeFrame(ts) {
+      if (!startTime) startTime = ts;
+      var elapsed = ts - startTime;
+      var alpha = Math.min(elapsed / fadeDuration, 1);
+      drawStep(idx, alpha);
+      if (alpha < 1) {
+        animTimer = requestAnimationFrame(fadeFrame);
+      } else {
+        animTimer = setTimeout(function() { runStroke(idx + 1); }, stagger);
+      }
+    }
+    animTimer = requestAnimationFrame(fadeFrame);
+  }
+
+  runStroke(0);
 }
 
 // ── Wrap text helper ──────────────────────────────────────────────────────────
