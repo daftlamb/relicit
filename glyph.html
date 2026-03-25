@@ -340,9 +340,7 @@ function renderInkStroke(ctx, strokePath, cx, cy, size, inkCol, holeSeed, depthF
   function hr() { hs=(hs*1664525+1013904223)&0x7fffffff; return hs/0x7fffffff; }
 
   // 3. Draw ink wash dots — adaptive step keeps total dots ≤ ~8000
-  var maxD = 8000;
-  var estPx = sampleSz * sampleSz * 0.25;
-  var step = Math.max(1, Math.round(Math.sqrt(estPx / maxD)));
+  var step = 1; // sampleSz capped at 512 so max ~512*512*keepRate pixels
   var ox = cx - size/2;
   var oy = cy - size/2;
 
@@ -667,8 +665,9 @@ function animatePoster(ch, data, etymInfo) {
     var sl2=preLayout[si2];
     var focus2=preFocus[si2];
     // Cap sample canvas at 512px max — hero strokes are huge but we don't need all pixels
+    var isHero2=(si2===heroIdx2);
     var sampleSize = Math.min(sl2.size, 512);
-    var sizeScale = sl2.size / sampleSize; // scale dots back up to real size
+    var sizeScale = sl2.size / sampleSize;
     var ofc2=document.createElement('canvas');
     ofc2.width=sampleSize; ofc2.height=sampleSize;
     var ofx2=ofc2.getContext('2d');
@@ -682,9 +681,8 @@ function animatePoster(ch, data, etymInfo) {
     var hs3=seed2+si2*7919; function hr3(){hs3=(hs3*1664525+1013904223)&0x7fffffff;return hs3/0x7fffffff;}
     var dots=[];
     // Adaptive step: keep total dots ≤ 8000 per stroke regardless of size
-    var maxDots = 8000;
-    var estPixels = sampleSize * sampleSize * 0.25; // rough fill estimate
-    var skipRate = Math.max(1, Math.round(Math.sqrt(estPixels / maxDots)));
+    // skipRate=1: full density (sampleSize already capped at 512, so max ~512*512*keepRate dots)
+    var skipRate = 1;
     var blurAmt2=(1-focus2)*sl2.size*0.18;
     var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
     var keepR2=0.2+focus2*0.55;
