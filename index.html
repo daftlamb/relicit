@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Relic It — Museum Object Posters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Noto+Serif+SC:wght@300;400&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f5;--panel-bg:#fff;--border:#e0e0e0;
+  --text:#1a1a1a;--muted:#888;--accent:#39ff14;
+  --header-bg:#fff;--header-h:44px;
+}
+[data-theme="dark"]{
+  --bg:#141414;--panel-bg:#1e1e1e;--border:#2a2a2a;
+  --text:#f0f0f0;--muted:#666;--accent:#39ff14;--header-bg:#0e0e0e;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Outfit','Noto Serif SC',sans-serif;font-size:13px;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+header{height:var(--header-h);background:var(--header-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;z-index:100}
+.brand{font-size:16px;font-weight:500;letter-spacing:-.3px}
+.brand-it{color:var(--accent)}
+.header-spacer{flex:1}
+.btn-icon{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;height:28px;cursor:pointer;font-family:inherit;font-size:12px;padding:0 10px;transition:border-color .15s,color .15s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+
+#app{display:flex;flex:1;min-height:0}
+#panel{width:300px;flex-shrink:0;background:var(--panel-bg);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.panel-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.section-title{font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 12px;font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s}
+.btn:hover,.btn.active{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);border:none;color:#000;border-radius:6px;padding:8px 12px;font-family:inherit;font-size:12px;font-weight:500;cursor:pointer;width:100%;transition:opacity .15s}
+.btn-primary:hover{opacity:.85}
+.search-row{display:flex;gap:6px}
+#search-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-family:inherit;font-size:12px;outline:none;transition:border-color .15s}
+#search-input:focus{border-color:var(--accent)}
+.chip-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.chip{background:none;border:1px solid var(--border);color:var(--muted);border-radius:20px;font-family:inherit;font-size:10px;padding:3px 10px;cursor:pointer;transition:all .15s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.color-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:11px;color:var(--muted)}
+.color-row:last-child{margin-bottom:0}
+input[type=color]{width:32px;height:22px;border:1px solid var(--border);border-radius:4px;cursor:pointer;padding:1px;background:none}
+.btn-group{display:flex;gap:4px;flex-wrap:wrap}
+.btn-group .btn{padding:4px 10px;font-size:11px}
+#result-card{display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px}
+.result-title{font-size:12px;font-weight:500;margin-bottom:3px}
+.result-meta{font-size:10px;color:var(--muted);line-height:1.6}
+#panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+#status{font-size:11px;color:var(--muted);min-height:14px;letter-spacing:.04em}
+
+#canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);position:relative;overflow:hidden}
+#poster-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.12);max-width:100%;max-height:100%}
+
+/* Mobile */
+@media(max-width:700px){
+  #app{flex-direction:column}
+  #panel{width:100%;height:auto;max-height:55vh;border-right:none;border-top:1px solid var(--border);order:2}
+  #canvas-area{flex:1;min-height:0;order:1}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Relic<span class="brand-it">It</span></div>
+  <div class="header-spacer"></div>
+  <button class="btn-icon" id="btn-export">↓ PNG</button>
+  <button class="btn-icon" id="btn-about">About</button>
+</header>
+
+<div id="app">
+  <div id="panel">
+
+    <div class="panel-section">
+      <div class="section-title">Search Object</div>
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="e.g. Tang dynasty, lotus, jade…" />
+        <button class="btn" id="btn-search" style="white-space:nowrap">Search</button>
+      </div>
+      <div class="chip-row">
+        <button class="chip" data-q="Tang dynasty ceramic">唐三彩</button>
+        <button class="chip" data-q="Buddhist sculpture">佛造像</button>
+        <button class="chip" data-q="Chinese jade">玉器</button>
+        <button class="chip" data-q="Song dynasty porcelain">宋瓷</button>
+        <button class="chip" data-q="Chinese bronze">青铜器</button>
+        <button class="chip" data-q="landscape painting">山水画</button>
+        <button class="chip" data-q="calligraphy">书法</button>
+        <button class="chip" data-q="Ming dynasty">明代</button>
+      </div>
+      <div id="result-card">
+        <div class="result-title" id="rc-title"></div>
+        <div class="result-meta" id="rc-meta"></div>
+      </div>
+      <div id="status" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Poster Style</div>
+      <div class="btn-group" id="style-group">
+        <button class="btn active" data-s="museum">Museum</button>
+        <button class="btn" data-s="dark">Dark</button>
+        <button class="btn" data-s="minimal">Minimal</button>
+        <button class="btn" data-s="editorial">Editorial</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Colors</div>
+      <div class="color-row">
+        <span>Background</span>
+        <input type="color" id="col-bg" value="#f5efe0" />
+      </div>
+      <div class="color-row">
+        <span>Accent</span>
+        <input type="color" id="col-accent" value="#8a6a3a" />
+      </div>
+      <div class="color-row">
+        <span>Text</span>
+        <input type="color" id="col-text" value="#2a1e0e" />
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="section-title">Frame</div>
+      <div class="btn-group" id="frame-group">
+        <button class="btn active" data-f="label">Label</button>
+        <button class="btn" data-f="minimal">Minimal</button>
+        <button class="btn" data-f="none">None</button>
+      </div>
+    </div>
+
+    <div id="panel-export">
+      <div id="status-export"></div>
+      <button class="btn-primary" id="btn-generate">Generate Poster</button>
+    </div>
+
+  </div>
+
+  <div id="canvas-area">
+    <canvas id="poster-canvas" width="520" height="680"></canvas>
+  </div>
+</div>
+
+<script>
+var canvas = document.getElementById('poster-canvas');
+var ctx = canvas.getContext('2d');
+var W = canvas.width, H = canvas.height;
+
+var currentObj = null;
+var currentStyle = 'museum';
+var currentFrame = 'label';
+
+// Style presets
+var STYLES = {
+  museum: {bg:'#f5efe0', accent:'#8a6a3a', text:'#2a1e0e', label:'#3a2a10'},
+  dark:   {bg:'#1a1614', accent:'#c8a060', text:'#e8dcc8', label:'#0e0c0a'},
+  minimal:{bg:'#fafaf8', accent:'#333333', text:'#111111', label:'#f0f0ee'},
+  editorial:{bg:'#e8e0d4', accent:'#c03030', text:'#1a1010', label:'#1a1010'},
+};
+
+// ---- Draw empty state ----
+function drawEmpty() {
+  ctx.fillStyle = '#f5efe0';
+  ctx.fillRect(0,0,W,H);
+  drawPaperTexture('#f5efe0');
+  ctx.font = '300 13px Outfit,sans-serif';
+  ctx.fillStyle = 'rgba(100,80,50,.4)';
+  ctx.textAlign = 'center';
+  ctx.fillText('Search a museum object to generate its poster', W/2, H/2);
+}
+drawEmpty();
+
+// ---- Met Museum API ----
+function searchMet(query, cb) {
+  var url = 'https://collectionapi.metmuseum.org/public/collection/v1/search'
+    + '?q=' + encodeURIComponent(query)
+    + '&hasImages=true&limit=20';
+  fetch(url)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if (!d.objectIDs || d.objectIDs.length === 0) { cb('No results'); return; }
+      // Pick a random object from top 20
+      var ids = d.objectIDs.slice(0, 20);
+      var id = ids[Math.floor(Math.random() * ids.length)];
+      return fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id);
+    })
+    .then(function(r){return r.json();})
+    .then(function(obj){
+      if (obj && obj.primaryImageSmall) cb(null, obj);
+      else cb('No image available');
+    })
+    .catch(function(e){ cb(e.toString()); });
+}
+
+// ---- Paper texture ----
+function drawPaperTexture(bgColor) {
+  // Deterministic grain using LCG
+  var s = 42;
+  function lcg(){s=(s*1664525+1013904223)&0x7fffffff;return s/0x7fffffff;}
+  for (var i=0;i<600;i++){
+    var x=lcg()*W, y=lcg()*H, r=0.3+lcg()*0.7;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fillStyle='rgba(80,60,30,'+(0.02+lcg()*0.05)+')';
+    ctx.fill();
+  }
+}
+
+// ---- Corner ornaments ----
+function drawCorners(inset, armLen, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.8;
+  var corners = [[inset,inset,1,1],[W-inset,inset,-1,1],[inset,H-inset,1,-1],[W-inset,H-inset,-1,-1]];
+  corners.forEach(function(c){
+    ctx.beginPath();ctx.moveTo(c[0]+c[2]*armLen,c[1]);ctx.lineTo(c[0],c[1]);ctx.lineTo(c[0],c[1]+c[3]*armLen);ctx.stroke();
+  });
+}
+
+// ---- Load image ----
+function loadImage(url, cb) {
+  var img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = function(){ cb(null, img); };
+  img.onerror = function(){ cb('Image load failed'); };
+  img.src = url;
+}
+
+// ---- Extract dominant color from image ----
+function getDominantColor(img) {
+  var tmp = document.createElement('canvas');
+  tmp.width = 40; tmp.height = 40;
+  var tc = tmp.getContext('2d');
+  tc.drawImage(img, 0, 0, 40, 40);
+  var d = tc.getImageData(0,0,40,40).data;
+  var r=0,g=0,b=0,cnt=0;
+  for (var i=0;i<d.length;i+=16){
+    r+=d[i];g+=d[i+1];b+=d[i+2];cnt++;
+  }
+  r=Math.round(r/cnt);g=Math.round(g/cnt);b=Math.round(b/cnt);
+  return 'rgb('+r+','+g+','+b+')';
+}
+
+// ---- Draw poster ----
+function drawPoster(obj, img) {
+  var st = STYLES[currentStyle] || STYLES.museum;
+  var bg = document.getElementById('col-bg').value || st.bg;
+  var accent = document.getElementById('col-accent').value || st.accent;
+  var textCol = document.getElementById('col-text').value || st.text;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+  drawPaperTexture(bg);
+
+  // Image area — upper portion
+  var imgPad = 36;
+  var imgW = W - imgPad*2;
+  var imgH = Math.round(H * 0.52);
+  var imgX = imgPad;
+  var imgY = 48;
+
+  // Draw image with contain fit
+  if (img) {
+    var scale = Math.min(imgW / img.naturalWidth, imgH / img.naturalHeight);
+    var dw = img.naturalWidth * scale;
+    var dh = img.naturalHeight * scale;
+    var dx = imgX + (imgW - dw) / 2;
+    var dy = imgY + (imgH - dh) / 2;
+
+    // Shadow behind image
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+  }
+
+  // Divider line
+  var divY = imgY + imgH + 24;
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();ctx.moveTo(imgPad, divY);ctx.lineTo(W-imgPad, divY);ctx.stroke();
+
+  // Object info text block
+  var tx = imgPad;
+  var ty = divY + 22;
+  var lineH = 24;
+
+  // Title
+  var title = obj.title || 'Untitled';
+  if (title.length > 50) title = title.slice(0,48) + '…';
+  ctx.fillStyle = textCol;
+  ctx.font = '400 17px Outfit,sans-serif';
+  ctx.textAlign = 'left';
+  // Word wrap title
+  var words = title.split(' ');
+  var line = '';
+  var maxW = W - imgPad*2;
+  for (var wi=0;wi<words.length;wi++) {
+    var test = line + (line?'  ':'' ) + words[wi];
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, tx, ty); ty += 22; line = words[wi];
+    } else { line = test; }
+  }
+  if (line) { ctx.fillText(line, tx, ty); ty += 28; }
+
+  // Culture / period
+  var meta = [obj.culture, obj.period, obj.dynasty].filter(Boolean).join('  ·  ');
+  if (meta) {
+    ctx.font = 'italic 300 12px Outfit,sans-serif';
+    ctx.fillStyle = accent;
+    ctx.fillText(meta, tx, ty); ty += 20;
+  }
+
+  // Medium
+  if (obj.medium) {
+    var med = obj.medium.length > 60 ? obj.medium.slice(0,58)+'…' : obj.medium;
+    ctx.font = '300 10px Outfit,sans-serif';
+    ctx.fillStyle = textCol + '99';
+    ctx.fillText(med, tx, ty); ty += 18;
+  }
+
+  // Date
+  if (obj.objectDate) {
+    ctx.font = '300 10px Outfit,sans-serif';
+    ctx.fillStyle = textCol + '88';
+    ctx.fillText(obj.objectDate, tx, ty); ty += 16;
+  }
+
+  // Museum credit line at bottom
+  var creditY = H - 20;
+  ctx.font = '300 9px Outfit,sans-serif';
+  ctx.fillStyle = textCol + '55';
+  ctx.textAlign = 'left';
+  ctx.fillText('The Metropolitan Museum of Art', imgPad, creditY);
+  ctx.textAlign = 'right';
+  ctx.fillText('Relic It · relicitapp.com', W-imgPad, creditY);
+
+  // Corner ornaments
+  drawCorners(14, 18, accent + '66');
+
+  // Frame overlay
+  if (currentFrame === 'label') {
+    var stripH = 44;
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, H-stripH, W, stripH);
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.font = 'italic 400 13px Outfit,sans-serif';
+    ctx.textAlign = 'left';
+    var shortTitle = (obj.title||'').slice(0,40);
+    ctx.fillText(shortTitle, 16, H-stripH+18);
+    ctx.font = '300 9px Outfit,sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.fillText((obj.objectDate||'') + (obj.culture ? '  ' + obj.culture : ''), 16, H-stripH+32);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,255,255,.5)';
+    ctx.font = '300 9px Outfit,sans-serif';
+    ctx.fillText('Relic It', W-16, H-stripH+18);
+  } else if (currentFrame === 'minimal') {
+    ctx.strokeStyle = accent + '55';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(10, 10, W-20, H-20);
+  }
+}
+
+// ---- Search + generate ----
+function doSearch(query) {
+  document.getElementById('status').textContent = 'Searching Met Museum…';
+  document.getElementById('result-card').style.display = 'none';
+
+  searchMet(query, function(err, obj) {
+    if (err) {
+      document.getElementById('status').textContent = err;
+      return;
+    }
+    currentObj = obj;
+    document.getElementById('status').textContent = 'Loading image…';
+
+    // Show result card
+    document.getElementById('rc-title').textContent = obj.title || 'Untitled';
+    var meta = [obj.culture, obj.period, obj.dynasty, obj.objectDate].filter(Boolean).join(' · ');
+    document.getElementById('rc-meta').textContent = meta || obj.medium || '';
+    document.getElementById('result-card').style.display = 'block';
+
+    loadImage(obj.primaryImageSmall, function(imgErr, img) {
+      document.getElementById('status').textContent = '';
+      if (imgErr) {
+        document.getElementById('status').textContent = 'Image load failed, try another';
+        return;
+      }
+      drawPoster(obj, img);
+    });
+  });
+}
+
+// ---- UI ----
+document.getElementById('btn-search').addEventListener('click', function(){
+  var v=document.getElementById('search-input').value.trim(); if(v) doSearch(v);
+});
+document.getElementById('search-input').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){var v=this.value.trim();if(v)doSearch(v);}
+});
+document.querySelectorAll('.chip').forEach(function(c){
+  c.addEventListener('click',function(){
+    document.getElementById('search-input').value=this.dataset.q;
+    doSearch(this.dataset.q);
+  });
+});
+document.getElementById('btn-generate').addEventListener('click', function(){
+  if(currentObj){
+    loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+  } else {
+    var v=document.getElementById('search-input').value.trim()||'Tang dynasty ceramic';
+    doSearch(v);
+  }
+});
+document.querySelectorAll('#style-group .btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#style-group .btn').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    currentStyle=this.dataset.s;
+    var st=STYLES[currentStyle];
+    document.getElementById('col-bg').value=st.bg;
+    document.getElementById('col-accent').value=st.accent;
+    document.getElementById('col-text').value=st.text;
+    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+  });
+});
+document.querySelectorAll('#frame-group .btn').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('#frame-group .btn').forEach(function(x){x.classList.remove('active');});
+    this.classList.add('active');
+    currentFrame=b.dataset.f;
+    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+  });
+});
+['col-bg','col-accent','col-text'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(){
+    if(currentObj) loadImage(currentObj.primaryImageSmall,function(e,img){if(!e)drawPoster(currentObj,img);});
+  });
+});
+document.getElementById('btn-export').addEventListener('click',function(){
+  var a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='relicit.png';a.click();
+});
+document.getElementById('btn-about').addEventListener('click',function(){
+  alert('Relic It — Museum Object Posters\n\nSearch any object from the Met Museum collection and generate a designed poster.');
+});
+
+// Auto-load a starter
+var starters=['Tang dynasty ceramic','Buddhist sculpture','Chinese jade','Song dynasty porcelain'];
+doSearch(starters[Math.floor(Math.random()*starters.length)]);
+</script>
+</body>
+</html>
