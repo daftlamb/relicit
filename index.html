@@ -185,28 +185,31 @@ function searchMet(query, cb) {
       if (!d.objectIDs || d.objectIDs.length === 0) {
         cb('No results found for "' + query + '"'); return;
       }
-      var ids = d.objectIDs.slice(0, 30);
-      var id = ids[Math.floor(Math.random() * ids.length)];
-      fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id)
-        .then(function(r){ return r.json(); })
-        .then(function(obj){
-          if (obj && (obj.primaryImageSmall || obj.primaryImage)) {
-            obj._imgUrl = obj.primaryImageSmall || obj.primaryImage;
-            cb(null, obj);
-          } else {
-            // Try next one
-            var id2 = ids[Math.floor(Math.random() * ids.length)];
-            fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id2)
-              .then(function(r2){ return r2.json(); })
-              .then(function(obj2){
-                if (obj2 && (obj2.primaryImageSmall || obj2.primaryImage)) {
-                  obj2._imgUrl = obj2.primaryImageSmall || obj2.primaryImage;
-                  cb(null, obj2);
-                } else { cb('No image available, try another search'); }
-              }).catch(function(e){ cb(e.toString()); });
-          }
-        })
-        .catch(function(e){ cb(e.toString()); });
+      // Shuffle top 40 IDs and try them sequentially until one has an image
+      var ids = d.objectIDs.slice(0, 40);
+      // Fisher-Yates shuffle
+      for (var i = ids.length-1; i > 0; i--) {
+        var j = Math.floor(Math.random()*(i+1));
+        var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+      }
+      var attempt = 0;
+      function tryNext() {
+        if (attempt >= ids.length) { cb('No image found, try another search'); return; }
+        var id = ids[attempt++];
+        fetch('https://collectionapi.metmuseum.org/public/collection/v1/objects/' + id)
+          .then(function(r){ return r.json(); })
+          .then(function(obj){
+            var imgUrl = obj && (obj.primaryImageSmall || obj.primaryImage);
+            if (imgUrl) {
+              obj._imgUrl = imgUrl;
+              cb(null, obj);
+            } else {
+              tryNext();
+            }
+          })
+          .catch(function(){ tryNext(); });
+      }
+      tryNext();
     })
     .catch(function(e){ cb('Network error: ' + e.toString()); });
 }
