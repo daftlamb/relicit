@@ -44,87 +44,11 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 #panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
 #status{font-size:11px;color:var(--muted);min-height:14px;margin-top:6px}
 #canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
-#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15);max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15)}
 @media(max-width:700px){
-  /* App fills full viewport; panel is fixed so canvas-area gets exact remaining space */
-  html,body{height:100%;overflow:hidden}
-  #app{flex-direction:column;width:100%;height:calc(100vh - var(--header-h));overflow:hidden}
-  #canvas-area{
-    width:100%;
-    height:calc(100vh - var(--header-h) - 48px);
-    flex:none;
-    min-height:0;
-    overflow:hidden;
-    order:1;
-    display:flex;
-    align-items:flex-start;
-    justify-content:center;
-    box-sizing:border-box;
-  }
-  #glyph-canvas{
-    /* Fit by height — canvas is portrait 720×1020, height is limiting axis on mobile */
-    max-height:calc(100vh - var(--header-h) - 48px);
-    max-width:100%;
-    width:auto;
-    height:auto;
-  }
-  #panel{
-    position:fixed;
-    bottom:0;left:0;right:0;
-    width:100%;
-    height:48px;
-    max-height:88vh;
-    border-right:none;
-    border-top:1px solid var(--border);
-    border-radius:16px 16px 0 0;
-    z-index:100;
-    transition:height .3s cubic-bezier(.4,0,.2,1);
-    overflow:hidden;
-    box-shadow:0 -4px 24px rgba(0,0,0,.15);
-    order:2;
-  }
-  #panel.drawer-open{height:82vh}
-  #panel-inner{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
-  #drawer-handle{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    height:48px;
-    cursor:pointer;
-    flex-shrink:0;
-    touch-action:none;
-    padding:0 16px;
-    position:relative;
-  }
-  #drawer-handle::before{
-    content:'';
-    width:36px;height:4px;
-    background:var(--border);
-    border-radius:2px;
-    position:absolute;
-    top:10px;
-    left:50%;
-    transform:translateX(-50%);
-  }
-  #drawer-quick-gen{
-    position:absolute;
-    right:16px;
-    top:50%;
-    transform:translateY(-50%);
-    background:var(--accent);
-    color:#fff;
-    border:none;
-    border-radius:8px;
-    padding:6px 14px;
-    font-family:inherit;
-    font-size:13px;
-    font-weight:500;
-    cursor:pointer;
-  }
-}
-@media(min-width:701px){
-  #drawer-handle{display:none}
-  #panel-inner{height:100%;overflow-y:auto;display:flex;flex-direction:column}
+  #app{flex-direction:column}
+  #panel{width:100%;height:auto;max-height:52vh;border-right:none;border-top:1px solid var(--border);order:2;overflow-y:auto}
+  #canvas-area{flex:1;order:1}
 }
 </style>
 </head>
@@ -137,10 +61,6 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 </header>
 <div id="app">
   <div id="panel">
-    <div id="drawer-handle">
-      <button id="drawer-quick-gen">✦ Generate</button>
-    </div>
-    <div id="panel-inner">
     <div class="panel-section">
       <div class="section-title">Character</div>
       <input class="char-input" id="char-input" maxlength="1" placeholder="&#23383;" autocomplete="off" spellcheck="false"/>
@@ -188,52 +108,12 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
       <button class="btn-primary" id="btn-export-panel">&#8595; Download PNG</button>
       <div id="status"></div>
     </div>
-    </div><!-- /panel-inner -->
-  </div><!-- /panel -->
+  </div>
   <div id="canvas-area">
     <canvas id="glyph-canvas" width="520" height="680"></canvas>
   </div>
 </div>
 <script>
-// ── Mobile drawer ────────────────────────────────────────────────────────────
-(function(){
-  var panel = document.getElementById('panel');
-  var handle = document.getElementById('drawer-handle');
-  if (!handle || !panel) return;
-  var isOpen = false, startY = 0, startH = 0, dragging = false;
-  function setOpen(open) {
-    isOpen = open;
-    panel.classList.toggle('drawer-open', open);
-    panel.style.height = '';
-  }
-  // Quick generate button — runs generate then closes drawer
-  var quickBtn = document.getElementById('drawer-quick-gen');
-  if (quickBtn) {
-    quickBtn.addEventListener('click', function(e){
-      e.stopPropagation();
-      // trigger generate (defined in main IIFE)
-      var genBtn = document.getElementById('btn-generate');
-      if (genBtn) genBtn.click();
-      setOpen(false); // collapse drawer so animation is visible
-    });
-  }
-  handle.addEventListener('click', function(){ if (!dragging) setOpen(!isOpen); });
-  handle.addEventListener('touchstart', function(e){
-    startY = e.touches[0].clientY; startH = panel.offsetHeight; dragging = false;
-    panel.style.transition = 'none';
-  }, {passive:true});
-  handle.addEventListener('touchmove', function(e){
-    var dy = startY - e.touches[0].clientY;
-    if (Math.abs(dy) > 4) dragging = true;
-    panel.style.height = Math.max(64, Math.min(window.innerHeight * 0.88, startH + dy)) + 'px';
-  }, {passive:true});
-  handle.addEventListener('touchend', function(){
-    panel.style.transition = '';
-    setOpen(panel.offsetHeight > window.innerHeight * 0.3);
-    setTimeout(function(){ dragging = false; }, 50);
-  });
-})();
-
 (function(){
 'use strict';
 
@@ -326,66 +206,6 @@ var glyphCache = {};
 var animTimer = null;
 
 
-// ── 节气 Solar Terms ──────────────────────────────────────────────────────────
-var SOLAR_TERMS = [
-  {name:'小寒',en:'Minor Cold'},{name:'大寒',en:'Major Cold'},
-  {name:'立春',en:'Start of Spring'},{name:'雨水',en:'Rain Water'},
-  {name:'惊蛰',en:'Awakening of Insects'},{name:'春分',en:'Spring Equinox'},
-  {name:'清明',en:'Clear and Bright'},{name:'谷雨',en:'Grain Rain'},
-  {name:'立夏',en:'Start of Summer'},{name:'小满',en:'Grain Buds'},
-  {name:'芒种',en:'Grain in Ear'},{name:'夏至',en:'Summer Solstice'},
-  {name:'小暑',en:'Minor Heat'},{name:'大暑',en:'Major Heat'},
-  {name:'立秋',en:'Start of Autumn'},{name:'处暑',en:'End of Heat'},
-  {name:'白露',en:'White Dew'},{name:'秋分',en:'Autumnal Equinox'},
-  {name:'寒露',en:'Cold Dew'},{name:'霜降',en:'Frost\'s Descent'},
-  {name:'立冬',en:'Start of Winter'},{name:'小雪',en:'Minor Snow'},
-  {name:'大雪',en:'Major Snow'},{name:'冬至',en:'Winter Solstice'}
-];
-// Approximate solar term dates (day of month per month, index 0=Jan)
-var SOLAR_TERM_DAYS = [6,20,4,19,6,21,5,20,6,21,6,21,7,23,7,23,8,23,8,23,7,22,7,22];
-function getCurrentSolarTerm() {
-  var now = new Date();
-  var m = now.getMonth(); // 0-11
-  var d = now.getDate();
-  // Each month has 2 terms; pick the closer one
-  var idx1 = m * 2;
-  var idx2 = m * 2 + 1;
-  var day1 = SOLAR_TERM_DAYS[idx1], day2 = SOLAR_TERM_DAYS[idx2];
-  if (d < day1) { idx1 = ((m-1)*2+1+24)%24; return SOLAR_TERMS[idx1]; }
-  if (d < day2) return SOLAR_TERMS[idx1];
-  return SOLAR_TERMS[idx2];
-}
-
-// ── Weather cache ─────────────────────────────────────────────────────────────
-var weatherCache = null;
-var weatherStr = '';
-function fetchWeather() {
-  if (weatherCache) return;
-  var url = 'https://wttr.in/?format=j1';
-  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  var timer = controller ? setTimeout(function(){ controller.abort(); }, 4000) : null;
-  var opts = controller ? {signal: controller.signal} : {};
-  fetch(url, opts)
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (timer) clearTimeout(timer);
-      var cur = d.current_condition && d.current_condition[0];
-      if (!cur) return;
-      var temp = cur.temp_C + '°C';
-      var code = parseInt(cur.weatherCode||'113');
-      var emoji = code<=113?'☀':code<=116?'⛅':code<=119?'☁':code<=176?'🌦':code<=260?'🌫':code<=296?'🌧':code<=377?'🌨':code<=386?'⛈':'~';
-      var windSpd = cur.windspeedKmph ? cur.windspeedKmph+'km/h' : '';
-      weatherStr = emoji+' '+temp+(windSpd?' · '+windSpd:'');
-      weatherCache = true;
-    })
-    .catch(function(){
-      if (timer) clearTimeout(timer);
-      weatherStr = ''; // silently fail, no block
-    });
-}
-// Defer weather fetch — don't block page init
-setTimeout(fetchWeather, 500);
-
 // DOM refs
 var canvas = document.getElementById('glyph-canvas');
 var ctx = canvas.getContext('2d');
@@ -394,16 +214,8 @@ var DPR = window.devicePixelRatio || 1;
 var CW = 720, CH = 1020;
 canvas.width = CW * DPR;
 canvas.height = CH * DPR;
-// On mobile: let CSS max-width/max-height scale the canvas to fit
-// On desktop: set explicit size
-if (window.innerWidth > 700) {
-  canvas.style.width = CW + 'px';
-  canvas.style.height = CH + 'px';
-} else {
-  // CSS handles scaling via max-width:100% max-height:100%
-  canvas.style.width = '';
-  canvas.style.height = '';
-}
+canvas.style.width = CW + 'px';
+canvas.style.height = CH + 'px';
 ctx.scale(DPR, DPR);
 var charInput = document.getElementById('char-input');
 var status = document.getElementById('status');
@@ -760,7 +572,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
 
     ctx.save();
-    var nLines = 2 + Math.floor(fg()*2); // 2–3 lines
+    var nLines = 7 + Math.floor(fg()*6);
     for (var li=0; li<nLines; li++) {
       // Each line: a bezier path sampled into particles
       var baseY = 30 + fg()*(H-86);
@@ -771,11 +583,12 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
       // Key: control points inherit velocity from previous segment — no sharp corners
       var pts = [{x:-20, y:baseY}];
       var cy_cur = baseY;
-      var vy = (fg()-0.5)*80; // wilder initial velocity
+      var vy = (fg()-0.5)*30; // initial vertical velocity
       for (var si3=0; si3<nSeg; si3++) {
         var x0 = -20 + si3*segW;
-        vy += (fg()-0.5)*60; // more random drift per segment
-        vy *= 0.65; // dampen but keep some momentum
+        // Velocity drifts gently — no abrupt direction change
+        vy += (fg()-0.5)*20;
+        vy *= 0.7; // dampen: tends back toward horizontal
         var endY = cy_cur + vy;
         // Control points follow the flow direction — smooth tangent continuity
         pts.push({
@@ -822,7 +635,7 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   }
 
   // ── Bottom strip ─────────────────────────────────────────────────────────────
-  var stripH = 80;
+  var stripH = 56;
   var stripY = H - stripH;
   // Strip background: semi-transparent ink color
   ctx.save();
@@ -838,10 +651,10 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   ctx.globalAlpha = 0.9;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText(ch, 20, stripY + 22);
+  ctx.fillText(ch, 20, stripY + stripH/2);
   ctx.restore();
 
-  // Pinyin + meaning — middle, row 1
+  // Pinyin + meaning — middle
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
@@ -850,18 +663,18 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     ctx.font = '500 13px Outfit, sans-serif';
     ctx.fillStyle = sc.bg;
     ctx.globalAlpha = 0.85;
-    ctx.fillText(etymInfo.pinyin, midX, stripY + 13);
+    ctx.fillText(etymInfo.pinyin, midX, stripY + 16);
   }
   if (etymInfo && etymInfo.meaning) {
     ctx.font = '300 10px Outfit, "Noto Sans SC", sans-serif';
     ctx.fillStyle = sc.bg;
     ctx.globalAlpha = 0.55;
     var meaning = etymInfo.meaning.length > 32 ? etymInfo.meaning.slice(0,30)+'…' : etymInfo.meaning;
-    ctx.fillText(meaning, midX, stripY + 27);
+    ctx.fillText(meaning, midX, stripY + 32);
   }
   ctx.restore();
 
-  // Right side row 1: stroke count
+  // Right side: stroke count + radical info
   ctx.save();
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
@@ -870,45 +683,16 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     ctx.font = '500 11px Outfit, sans-serif';
     ctx.fillStyle = sc.bg;
     ctx.globalAlpha = 0.55;
-    ctx.fillText(strokeCount + ' strokes', W - 16, stripY + 13);
+    ctx.fillText(strokeCount + ' strokes', W - 16, stripY + 16);
   }
-  ctx.restore();
-
-  // ── Row 2: 节气 + weather ──────────────────────────────────────────────────
-  var dividerY = stripY + 42;
-  ctx.save();
-  ctx.strokeStyle = sc.bg;
-  ctx.globalAlpha = 0.12;
-  ctx.lineWidth = 0.5;
-  ctx.beginPath(); ctx.moveTo(16, dividerY); ctx.lineTo(W-16, dividerY); ctx.stroke();
-  ctx.restore();
-
-  ctx.save();
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.font = '300 9px "Outfit", monospace';
+  // "Glyph It" brand
+  ctx.font = '300 9px Outfit, sans-serif';
   ctx.fillStyle = sc.bg;
-  var row2Y = stripY + 62;
-  var solarTerm = getCurrentSolarTerm();
-  var row2Left = '节气  ' + solarTerm.name + '  ' + solarTerm.en;
-  ctx.globalAlpha = 0.5;
-  ctx.fillText(row2Left, 16, row2Y);
+  ctx.globalAlpha = 0.3;
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('Glyph It', W - 16, H - 8);
   ctx.restore();
-
-  ctx.save();
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  ctx.font = '300 9px "Outfit", monospace';
-  ctx.fillStyle = sc.bg;
-  ctx.globalAlpha = 0.5;
-  var row2Right = weatherStr ? weatherStr : 'Glyph It';
-  ctx.fillText(row2Right, W - 16, row2Y);
-  if (weatherStr) {
-    ctx.globalAlpha = 0.2;
-    ctx.font = '300 8px Outfit, sans-serif';
-    ctx.fillText('Glyph It', W - 16, stripY + 75);
-  }
-  ctx.restore();
+}
 
 // ── Animate strokes — reveal one by one with dot fade-in ─────────────────────
 function animatePoster(ch, data, etymInfo) {
@@ -964,20 +748,13 @@ function animatePoster(ch, data, etymInfo) {
   }
 
   function drawOverlay() {
-    var stripH=80, stripY=H-stripH, sc3=SCHEMES[currentScheme];
+    var stripH=56, stripY=H-stripH, sc3=SCHEMES[currentScheme];
     ctx.save(); ctx.fillStyle=inkColor2(0.95); ctx.globalAlpha=0.88; ctx.fillRect(0,stripY,W,stripH); ctx.restore();
-    // Row 1: char + pinyin + meaning + strokes
-    ctx.save(); ctx.font='bold 38px "Noto Serif SC",serif'; ctx.fillStyle=sc3.bg; ctx.globalAlpha=0.9; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(ch,20,stripY+22); ctx.restore();
-    if(etymInfo&&etymInfo.pinyin){ctx.save();ctx.font='500 13px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.85;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.pinyin,80,stripY+13);ctx.restore();}
-    if(etymInfo&&etymInfo.meaning){ctx.save();ctx.font='300 10px Outfit,"Noto Sans SC",sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.55;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.meaning.slice(0,30),80,stripY+27);ctx.restore();}
-    var sc2n=data?data.strokes.length:0; if(sc2n){ctx.save();ctx.font='500 11px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.55;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(sc2n+' strokes',W-16,stripY+13);ctx.restore();}
-    // Divider
-    ctx.save();ctx.strokeStyle=sc3.bg;ctx.globalAlpha=0.12;ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(16,stripY+42);ctx.lineTo(W-16,stripY+42);ctx.stroke();ctx.restore();
-    // Row 2: 节气 + weather
-    var st2=getCurrentSolarTerm();
-    ctx.save();ctx.font='300 9px Outfit,monospace';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.5;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText('节气  '+st2.name+'  '+st2.en,16,stripY+62);ctx.restore();
-    ctx.save();ctx.font='300 9px Outfit,monospace';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.5;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(weatherStr||'Glyph It',W-16,stripY+62);ctx.restore();
-    if(weatherStr){ctx.save();ctx.font='300 8px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.2;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-16,H-4);ctx.restore();}
+    ctx.save(); ctx.font='bold 38px "Noto Serif SC",serif'; ctx.fillStyle=sc3.bg; ctx.globalAlpha=0.9; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(ch,20,stripY+stripH/2); ctx.restore();
+    if(etymInfo&&etymInfo.pinyin){ctx.save();ctx.font='500 13px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.85;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.pinyin,80,stripY+16);ctx.restore();}
+    if(etymInfo&&etymInfo.meaning){ctx.save();ctx.font='300 10px Outfit,"Noto Sans SC",sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.55;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(etymInfo.meaning.slice(0,30),80,stripY+32);ctx.restore();}
+    var sc2n=data?data.strokes.length:0; if(sc2n){ctx.save();ctx.font='500 11px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.55;ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillText(sc2n+' strokes',W-16,stripY+16);ctx.restore();}
+    ctx.save();ctx.font='300 9px Outfit,sans-serif';ctx.fillStyle=sc3.bg;ctx.globalAlpha=0.3;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.fillText('Glyph It',W-16,H-8);ctx.restore();
   }
 
   // ── Pre-sample all stroke pixels once ──────────────────────────────────────
@@ -1180,6 +957,8 @@ document.getElementById('btn-export-panel').addEventListener('click', exportPNG)
     setStatus('');
     drawPoster(initChar, data, ETYM[initChar] || null);
   });
+})();
+
 })();
 </script>
 </body>
