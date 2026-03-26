@@ -361,28 +361,30 @@ var weatherCache = null;
 var weatherStr = '';
 function fetchWeather() {
   if (weatherCache) return;
-  // wttr.in JSON API — format=j1 returns structured data
   var url = 'https://wttr.in/?format=j1';
-  fetch(url, {signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined})
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = controller ? setTimeout(function(){ controller.abort(); }, 4000) : null;
+  var opts = controller ? {signal: controller.signal} : {};
+  fetch(url, opts)
     .then(function(r){ return r.json(); })
     .then(function(d){
+      if (timer) clearTimeout(timer);
       var cur = d.current_condition && d.current_condition[0];
       if (!cur) return;
       var temp = cur.temp_C + '°C';
-      var desc = cur.weatherDesc && cur.weatherDesc[0] && cur.weatherDesc[0].value || '';
-      // Weather emoji map
       var code = parseInt(cur.weatherCode||'113');
-      var emoji = code<=113?'☀️':code<=116?'⛅':code<=119?'☁️':code<=176?'🌦':code<=260?'🌫':code<=296?'🌧':code<=377?'🌨':code<=386?'⛈':'🌀';
-      var windDir = cur.winddir16Point || '';
+      var emoji = code<=113?'☀':code<=116?'⛅':code<=119?'☁':code<=176?'🌦':code<=260?'🌫':code<=296?'🌧':code<=377?'🌨':code<=386?'⛈':'~';
       var windSpd = cur.windspeedKmph ? cur.windspeedKmph+'km/h' : '';
-      weatherStr = emoji+' '+temp+'  '+windSpd;
+      weatherStr = emoji+' '+temp+(windSpd?' · '+windSpd:'');
       weatherCache = true;
     })
     .catch(function(){
-      weatherStr = ''; // silently fail
+      if (timer) clearTimeout(timer);
+      weatherStr = ''; // silently fail, no block
     });
 }
-fetchWeather();
+// Defer weather fetch — don't block page init
+setTimeout(fetchWeather, 500);
 
 // DOM refs
 var canvas = document.getElementById('glyph-canvas');
