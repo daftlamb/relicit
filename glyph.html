@@ -189,6 +189,7 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn" style="flex:1" id="btn-export-2x">↓ 2×</button>
         <button class="btn" style="flex:1" id="btn-export-4x">↓ 4×</button>
+        <button class="btn" style="flex:1" id="btn-export-svg">↓ SVG</button>
       </div>
       <div id="status"></div>
     </div>
@@ -1142,6 +1143,22 @@ document.getElementById('btn-export-hdr').addEventListener('click', function(){ 
 document.getElementById('btn-export-panel').addEventListener('click', function(){ exportPNG(1); });
 document.getElementById('btn-export-2x').addEventListener('click', function(){ exportPNG(2); });
 document.getElementById('btn-export-4x').addEventListener('click', function(){ exportPNG(4); });
+document.getElementById('btn-export-svg').addEventListener('click', function(){
+  var ch = charInput.value.trim() || 'glyph';
+  var W = 720, H = 1020;
+  var pngData = canvas.toDataURL('image/png');
+  var svg = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
+    'width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">\n' +
+    '<image width="'+W+'" height="'+H+'" xlink:href="'+pngData+'"/>\n' +
+    '</svg>';
+  var blob = new Blob([svg], {type:'image/svg+xml'});
+  var link = document.createElement('a');
+  link.download = 'glyph-' + ch + '.svg';
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  setTimeout(function(){ URL.revokeObjectURL(link.href); }, 1000);
+});
 
 // ── Initial render ────────────────────────────────────────────────────────────
 (function() {
