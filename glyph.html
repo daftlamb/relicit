@@ -44,11 +44,87 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 #panel-export{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
 #status{font-size:11px;color:var(--muted);min-height:14px;margin-top:6px}
 #canvas-area{flex:1;display:flex;align-items:center;justify-content:center;background:var(--bg);overflow:hidden}
-#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15)}
+#glyph-canvas{border-radius:4px;box-shadow:0 4px 32px rgba(0,0,0,.15);max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
 @media(max-width:700px){
-  #app{flex-direction:column}
-  #panel{width:100%;height:auto;max-height:52vh;border-right:none;border-top:1px solid var(--border);order:2;overflow-y:auto}
-  #canvas-area{flex:1;order:1}
+  /* App fills full viewport; panel is fixed so canvas-area gets exact remaining space */
+  html,body{height:100%;overflow:hidden}
+  #app{flex-direction:column;width:100%;height:calc(100vh - var(--header-h));overflow:hidden}
+  #canvas-area{
+    width:100%;
+    height:calc(100vh - var(--header-h) - 48px);
+    flex:none;
+    min-height:0;
+    overflow:hidden;
+    order:1;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    box-sizing:border-box;
+  }
+  #glyph-canvas{
+    /* Fit by height — canvas is portrait 720×1020, height is limiting axis on mobile */
+    max-height:calc(100vh - var(--header-h) - 48px);
+    max-width:100%;
+    width:auto;
+    height:auto;
+  }
+  #panel{
+    position:fixed;
+    bottom:0;left:0;right:0;
+    width:100%;
+    height:48px;
+    max-height:88vh;
+    border-right:none;
+    border-top:1px solid var(--border);
+    border-radius:16px 16px 0 0;
+    z-index:100;
+    transition:height .3s cubic-bezier(.4,0,.2,1);
+    overflow:hidden;
+    box-shadow:0 -4px 24px rgba(0,0,0,.15);
+    order:2;
+  }
+  #panel.drawer-open{height:82vh}
+  #panel-inner{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column}
+  #drawer-handle{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:48px;
+    cursor:pointer;
+    flex-shrink:0;
+    touch-action:none;
+    padding:0 16px;
+    position:relative;
+  }
+  #drawer-handle::before{
+    content:'';
+    width:36px;height:4px;
+    background:var(--border);
+    border-radius:2px;
+    position:absolute;
+    top:10px;
+    left:50%;
+    transform:translateX(-50%);
+  }
+  #drawer-quick-gen{
+    position:absolute;
+    right:16px;
+    top:50%;
+    transform:translateY(-50%);
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:6px 14px;
+    font-family:inherit;
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+  }
+}
+@media(min-width:701px){
+  #drawer-handle{display:none}
+  #panel-inner{height:100%;overflow-y:auto;display:flex;flex-direction:column}
 }
 </style>
 </head>
@@ -61,6 +137,10 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
 </header>
 <div id="app">
   <div id="panel">
+    <div id="drawer-handle">
+      <button id="drawer-quick-gen">✦ Generate</button>
+    </div>
+    <div id="panel-inner">
     <div class="panel-section">
       <div class="section-title">Character</div>
       <input class="char-input" id="char-input" maxlength="1" placeholder="&#23383;" autocomplete="off" spellcheck="false"/>
@@ -99,7 +179,7 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
         <label class="toggle-switch"><input type="checkbox" id="tog-color"/><div class="toggle-track"></div><div class="toggle-knob"></div></label>
       </div>
       <div class="toggle-row">
-        <span>Fog texture</span>
+        <span>Flow lines</span>
         <label class="toggle-switch"><input type="checkbox" id="tog-fog" checked/><div class="toggle-track"></div><div class="toggle-knob"></div></label>
       </div>
     </div>
@@ -108,12 +188,52 @@ header{height:var(--header-h);background:var(--header-bg);border-bottom:1px soli
       <button class="btn-primary" id="btn-export-panel">&#8595; Download PNG</button>
       <div id="status"></div>
     </div>
-  </div>
+    </div><!-- /panel-inner -->
+  </div><!-- /panel -->
   <div id="canvas-area">
     <canvas id="glyph-canvas" width="520" height="680"></canvas>
   </div>
 </div>
 <script>
+// ── Mobile drawer ────────────────────────────────────────────────────────────
+(function(){
+  var panel = document.getElementById('panel');
+  var handle = document.getElementById('drawer-handle');
+  if (!handle || !panel) return;
+  var isOpen = false, startY = 0, startH = 0, dragging = false;
+  function setOpen(open) {
+    isOpen = open;
+    panel.classList.toggle('drawer-open', open);
+    panel.style.height = '';
+  }
+  // Quick generate button — runs generate then closes drawer
+  var quickBtn = document.getElementById('drawer-quick-gen');
+  if (quickBtn) {
+    quickBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      // trigger generate (defined in main IIFE)
+      var genBtn = document.getElementById('btn-generate');
+      if (genBtn) genBtn.click();
+      setOpen(false); // collapse drawer so animation is visible
+    });
+  }
+  handle.addEventListener('click', function(){ if (!dragging) setOpen(!isOpen); });
+  handle.addEventListener('touchstart', function(e){
+    startY = e.touches[0].clientY; startH = panel.offsetHeight; dragging = false;
+    panel.style.transition = 'none';
+  }, {passive:true});
+  handle.addEventListener('touchmove', function(e){
+    var dy = startY - e.touches[0].clientY;
+    if (Math.abs(dy) > 4) dragging = true;
+    panel.style.height = Math.max(64, Math.min(window.innerHeight * 0.88, startH + dy)) + 'px';
+  }, {passive:true});
+  handle.addEventListener('touchend', function(){
+    panel.style.transition = '';
+    setOpen(panel.offsetHeight > window.innerHeight * 0.3);
+    setTimeout(function(){ dragging = false; }, 50);
+  });
+})();
+
 (function(){
 'use strict';
 
@@ -214,8 +334,16 @@ var DPR = window.devicePixelRatio || 1;
 var CW = 720, CH = 1020;
 canvas.width = CW * DPR;
 canvas.height = CH * DPR;
-canvas.style.width = CW + 'px';
-canvas.style.height = CH + 'px';
+// On mobile: let CSS max-width/max-height scale the canvas to fit
+// On desktop: set explicit size
+if (window.innerWidth > 700) {
+  canvas.style.width = CW + 'px';
+  canvas.style.height = CH + 'px';
+} else {
+  // CSS handles scaling via max-width:100% max-height:100%
+  canvas.style.width = '';
+  canvas.style.height = '';
+}
 ctx.scale(DPR, DPR);
 var charInput = document.getElementById('char-input');
 var status = document.getElementById('status');
@@ -490,68 +618,6 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
   }
   ctx.restore();
 
-  // ── Flow lines — 国画山水横向粒子流线 ──────────────────────────────────────
-  if (document.getElementById('tog-fog') && document.getElementById('tog-fog').checked) {
-    var fogSeed = ch.codePointAt(0) * 999983;
-    function fg() { fogSeed=(fogSeed*1664525+1013904223)&0x7fffffff; return fogSeed/0x7fffffff; }
-    var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
-
-    ctx.save();
-    var nLines = 7 + Math.floor(fg()*6);
-    for (var li=0; li<nLines; li++) {
-      // Each line: a bezier path sampled into particles
-      var baseY = 30 + fg()*(H-86);
-      var nSeg = 4 + Math.floor(fg()*3);
-      var segW = (W+40) / nSeg;
-
-      // Build bezier control points
-      var pts = [{x:-20, y:baseY}];
-      var cy_cur = baseY;
-      for (var si3=0; si3<nSeg; si3++) {
-        var x0 = -20 + si3*segW;
-        pts.push({
-          cp1x: x0+segW*0.33, cp1y: cy_cur+(fg()-0.5)*80,
-          cp2x: x0+segW*0.66, cp2y: cy_cur+(fg()-0.5)*80,
-          x: x0+segW, y: cy_cur+(fg()-0.5)*50
-        });
-        cy_cur = pts[pts.length-1].y;
-      }
-
-      // Sample points along bezier path and draw tiny particles
-      var totalPts = 400 + Math.floor(fg()*150); // very dense
-      var lineAlpha = 0.15 + fg()*0.15;           // clearly visible
-      var dotR = 0.3 + fg()*0.6;
-
-      for (var pi2=0; pi2<totalPts; pi2++) {
-        var tGlobal = pi2 / totalPts;
-        var segIdx = Math.floor(tGlobal * nSeg);
-        var tSeg = (tGlobal * nSeg) - segIdx;
-        if (segIdx >= pts.length-1) segIdx = pts.length-2;
-
-        var p0 = pts[segIdx], p1 = pts[segIdx+1];
-        var mt = 1-tSeg;
-        var bx = mt*mt*mt*p0.x + 3*mt*mt*tSeg*p1.cp1x + 3*mt*tSeg*tSeg*p1.cp2x + tSeg*tSeg*tSeg*p1.x;
-        var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
-
-        var edgeFade = Math.sin(tGlobal * Math.PI);
-        // Wider scatter with gaussian-like falloff — dense core, soft diffuse edge
-        var sc1 = (fg()-0.5)*3;   // tight core
-        var sc2 = (fg()-0.5)*10;  // occasional outlier
-        var scatter = sc1 + (fg()>0.75 ? sc2 : 0);
-        var pAlpha = lineAlpha * edgeFade * (0.45 + fg()*0.55);
-        var pr = dotR * (0.4 + fg()*1.0);
-
-        ctx.globalAlpha = pAlpha;
-        ctx.fillStyle = 'rgb('+fogR+','+fogG+','+fogB+')';
-        ctx.beginPath();
-        ctx.arc(bx + (fg()-0.5)*2, by + scatter, pr, 0, Math.PI*2);
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
   // ── Seeded random for stable stroke layout ──────────────────────────────────
   var seed = ch.codePointAt(0);
   function sr() { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed / 0x7fffffff; }
@@ -624,6 +690,74 @@ function drawPoster(ch, data, etymInfo, _strokeLimit, _dotAlphaScale) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(ch, W / 2, H / 2);
+    ctx.restore();
+  }
+
+  // ── Flow lines — 国画山水横向粒子流线 ──────────────────────────────────────
+  if (document.getElementById('tog-fog') && document.getElementById('tog-fog').checked) {
+    var fogSeed = ch.codePointAt(0) * 999983;
+    function fg() { fogSeed=(fogSeed*1664525+1013904223)&0x7fffffff; return fogSeed/0x7fffffff; }
+    var fogR=ip.dark[0], fogG=ip.dark[1], fogB=ip.dark[2];
+
+    ctx.save();
+    var nLines = 2 + Math.floor(fg()*2); // 2–3 lines
+    for (var li=0; li<nLines; li++) {
+      // Each line: a bezier path sampled into particles
+      var baseY = 30 + fg()*(H-86);
+      var nSeg = 4 + Math.floor(fg()*3);
+      var segW = (W+40) / nSeg;
+
+      // Build smooth catmull-rom style control points
+      // Key: control points inherit velocity from previous segment — no sharp corners
+      var pts = [{x:-20, y:baseY}];
+      var cy_cur = baseY;
+      var vy = (fg()-0.5)*80; // wilder initial velocity
+      for (var si3=0; si3<nSeg; si3++) {
+        var x0 = -20 + si3*segW;
+        vy += (fg()-0.5)*60; // more random drift per segment
+        vy *= 0.65; // dampen but keep some momentum
+        var endY = cy_cur + vy;
+        // Control points follow the flow direction — smooth tangent continuity
+        pts.push({
+          cp1x: x0+segW*0.33, cp1y: cy_cur + vy*0.33,
+          cp2x: x0+segW*0.66, cp2y: endY - vy*0.33,
+          x: x0+segW, y: endY
+        });
+        cy_cur = endY;
+      }
+
+      // Sample points along bezier path and draw tiny particles
+      var totalPts = 400 + Math.floor(fg()*150); // very dense
+      var lineAlpha = 0.15 + fg()*0.15;           // clearly visible
+      var dotR = 0.3 + fg()*0.6;
+
+      for (var pi2=0; pi2<totalPts; pi2++) {
+        var tGlobal = pi2 / totalPts;
+        var segIdx = Math.floor(tGlobal * nSeg);
+        var tSeg = (tGlobal * nSeg) - segIdx;
+        if (segIdx >= pts.length-1) segIdx = pts.length-2;
+
+        var p0 = pts[segIdx], p1 = pts[segIdx+1];
+        var mt = 1-tSeg;
+        var bx = mt*mt*mt*p0.x + 3*mt*mt*tSeg*p1.cp1x + 3*mt*tSeg*tSeg*p1.cp2x + tSeg*tSeg*tSeg*p1.x;
+        var by = mt*mt*mt*p0.y + 3*mt*mt*tSeg*p1.cp1y + 3*mt*tSeg*tSeg*p1.cp2y + tSeg*tSeg*tSeg*p1.y;
+
+        var edgeFade = Math.sin(tGlobal * Math.PI);
+        // Wider scatter with gaussian-like falloff — dense core, soft diffuse edge
+        var sc1 = (fg()-0.5)*3;   // tight core
+        var sc2 = (fg()-0.5)*10;  // occasional outlier
+        var scatter = sc1 + (fg()>0.75 ? sc2 : 0);
+        var pAlpha = lineAlpha * edgeFade * (0.45 + fg()*0.55);
+        var pr = dotR * (0.4 + fg()*1.0);
+
+        ctx.globalAlpha = pAlpha;
+        ctx.fillStyle = 'rgb('+fogR+','+fogG+','+fogB+')';
+        ctx.beginPath();
+        ctx.arc(bx + (fg()-0.5)*2, by + scatter, pr, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -776,7 +910,16 @@ function animatePoster(ch, data, etymInfo) {
     // skipRate=1: full density (sampleSize already capped at 512, so max ~512*512*keepRate dots)
     var skipRate = 1;
     var blurAmt2=(1-focus2)*sl2.size*0.18;
-    var ip2r=ip2.dark[0],ip2g=ip2.dark[1],ip2b=ip2.dark[2];
+    // Color ink: per-stroke hue from palette if toggle is on
+    var useColor2 = document.getElementById('tog-color') && document.getElementById('tog-color').checked;
+    var sc2pal = SCHEMES[currentScheme].palette || [];
+    var ip2base = ip2.dark;
+    if (useColor2 && sc2pal.length) {
+      var ci2 = (seed2 + si2*7919) % sc2pal.length;
+      var hex2 = sc2pal[ci2].replace('#','');
+      ip2base = [parseInt(hex2.slice(0,2),16), parseInt(hex2.slice(2,4),16), parseInt(hex2.slice(4,6),16)];
+    }
+    var ip2r=ip2base[0], ip2g=ip2base[1], ip2b=ip2base[2];
     // Hero gets higher keep rate for denser dots
     var keepR2 = isHero2 ? (0.5 + focus2*0.45) : (0.2 + focus2*0.55);
     var ox2=sl2.cx-sl2.size/2, oy2=sl2.cy-sl2.size/2;
